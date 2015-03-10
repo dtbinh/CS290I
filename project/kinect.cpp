@@ -52,41 +52,13 @@
 #include "pcl/filters/voxel_grid.h"
 #include <pcl/segmentation/region_growing_rgb.h>
 #include <pcl/segmentation/region_growing.h>
+#include <boost/thread/mutex.hpp>
 
-
-///Mutex Class
-class Mutex {
-public:
-  Mutex() {
-    pthread_mutex_init( &m_mutex, NULL );
-  }
-  void lock() {
-    pthread_mutex_lock( &m_mutex );
-  }
-  void unlock() {
-    pthread_mutex_unlock( &m_mutex );
-  }
-
-  class ScopedLock
-  {
-    Mutex & _mutex;
-  public:
-    ScopedLock(Mutex & mutex)
-      : _mutex(mutex)
-    {
-      _mutex.lock();
-    }
-    ~ScopedLock()
-    {
-      _mutex.unlock();
-    }
-  };
-private:
-  pthread_mutex_t m_mutex;
-};
-
-
-
+#include <pcl/ModelCoefficients.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/point_types.h>
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -100,14 +72,14 @@ public:
   //~MyFreenectDevice(){}
   // Do not call directly even in child
   void VideoCallback(void* _rgb, uint32_t timestamp) {
-    Mutex::ScopedLock lock(m_rgb_mutex);
+    boost::mutex::scoped_lock lock(m_rgb_mutex);
     uint8_t* rgb = static_cast<uint8_t*>(_rgb);
     std::copy(rgb, rgb+getVideoBufferSize(), m_buffer_video.begin());
     m_new_rgb_frame = true;
   };
   // Do not call directly even in child
   void DepthCallback(void* _depth, uint32_t timestamp) {
-    Mutex::ScopedLock lock(m_depth_mutex);
+    boost::mutex::scoped_lock lock(m_depth_mutex);
     depth.clear();
     uint16_t* call_depth = static_cast<uint16_t*>(_depth);
     for (size_t i = 0; i < 640*480 ; i++) {
@@ -116,7 +88,7 @@ public:
     m_new_depth_frame = true;
   }
   bool getRGB(std::vector<uint8_t> &buffer) {
-    Mutex::ScopedLock lock(m_rgb_mutex);
+    boost::mutex::scoped_lock lock(m_rgb_mutex);
     if (!m_new_rgb_frame)
       return false;
     buffer.swap(m_buffer_video);
@@ -125,7 +97,7 @@ public:
   }
 
   bool getDepth(std::vector<uint16_t> &buffer) {
-    Mutex::ScopedLock lock(m_depth_mutex);
+    boost::mutex::scoped_lock lock(m_depth_mutex);
     if (!m_new_depth_frame)
       return false;
     buffer.swap(depth);
@@ -136,8 +108,8 @@ public:
 private:
   std::vector<uint16_t> depth;
   std::vector<uint8_t> m_buffer_video;
-  Mutex m_rgb_mutex;
-  Mutex m_depth_mutex;
+  boost::mutex m_depth_mutex;
+  boost::mutex m_rgb_mutex;
   bool m_new_rgb_frame;
   bool m_new_depth_frame;
 };
@@ -151,6 +123,29 @@ MyFreenectDevice* device;
 // --------------
 // -----Main-----
 // --------------
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr vis_cloud;
+boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+
+void visualizerThread()
+{
+  while (!viewer->wasStopped ())
+  {  
+
+    
+    if(vis_cloud){
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+      vis_cloud.swap(cloud);
+
+      if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
+	viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
+	viewer->setPointCloudRenderingProperties 
+	  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+      }
+    }
+    viewer->spinOnce ();
+  }
+}
+
 int main (int argc, char** argv)
 {
   //More Kinect Setup
@@ -167,7 +162,7 @@ int main (int argc, char** argv)
 
   // Create and setup the viewer
   printf("Create the viewer.\n");
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+
   viewer->setBackgroundColor (0, 0, 0);
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
@@ -179,22 +174,9 @@ int main (int argc, char** argv)
   //devicetwo = &freenect.createDevice<MyFreenectDevice>(1);
   device->startVideo();
   device->startDepth();
-  boost::this_thread::sleep (boost::posix_time::seconds (1));
-  //devicetwo->startVideo();
-  //devicetwo->startDepth();
-  //boost::this_thread::sleep (boost::posix_time::seconds (1));
-  //Grab until clean returns
-  int DepthCount = 0;
-  while (DepthCount == 0) {
-    device->updateState();
-    device->getDepth(mdepth);
-    device->getRGB(mrgb);
-    for (size_t i = 0;i < 480*640;i++)
-      DepthCount+=mdepth[i];
-  }
 
   pcl::VoxelGrid<pcl::PointXYZRGB> vox;
-  vox.setLeafSize (10.0f, 10.0f, 10.0f);
+  vox.setLeafSize (30.0f, 30.0f, 30.0f);
 
   // Some region growing stuff
   /*
@@ -214,14 +196,30 @@ int main (int argc, char** argv)
 
   pcl::RegionGrowing<pcl::PointXYZRGB, pcl::Normal> reg;
   reg.setMinClusterSize (500);
-  reg.setMaxClusterSize (1000000);
+  // reg.setMaxClusterSize (1000000);
   reg.setSearchMethod (tree);
   reg.setNumberOfNeighbours (30);
   //reg.setIndices (indices);
-  reg.setSmoothnessThreshold (1.0 / 180.0 * M_PI);
-  reg.setCurvatureThreshold (1.0);
+  reg.setSmoothnessThreshold (5.0 / 180.0 * M_PI);
+  reg.setCurvatureThreshold (2.0);
 
-
+  pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane;
+  seg_plane.setOptimizeCoefficients (true);
+  seg_plane.setModelType (pcl::SACMODEL_PLANE);
+  seg_plane.setMethodType (pcl::SAC_RANSAC);
+  seg_plane.setDistanceThreshold (10);
+  seg_plane.setMaxIterations (100);
+  
+  pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_cylinder;
+  seg_cylinder.setModelType (pcl::SACMODEL_CYLINDER);
+  seg_cylinder.setMethodType (pcl::SAC_RANSAC);
+  seg_cylinder.setNormalDistanceWeight (0.1);
+  seg_cylinder.setMaxIterations (100);
+  seg_cylinder.setDistanceThreshold (0.05);
+  seg_cylinder.setRadiusLimits (0, 0.1);
+  
+  boost::thread thrd1(
+    boost::bind(&visualizerThread));
   //--------------------
   // -----Main loop-----
   //--------------------
@@ -232,9 +230,14 @@ int main (int argc, char** argv)
   int iRealDepth = 0;
   int iTDepth = 0;
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
+  
+  pcl::ModelCoefficients::Ptr coefficients_plane (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers_plane (new pcl::PointIndices);
+  pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
+
   printf("Start the main loop.\n");
-  while (!viewer->wasStopped ())
-    {
+  while (!viewer->wasStopped ()){
       device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
@@ -246,9 +249,9 @@ int main (int argc, char** argv)
 	    {
 	      iRealDepth = mdepth[i];
 	      freenect_camera_to_world(device->getDevice(), u, v, iRealDepth, &x, &y);
-	      cloud->points[i].x  = x;//1000.0;
-	      cloud->points[i].y  = y;//1000.0;
-	      cloud->points[i].z = iRealDepth;//1000.0;
+	      cloud->points[i].x  = x;
+	      cloud->points[i].y  = y;
+	      cloud->points[i].z = iRealDepth;
 	      cloud->points[i].r = mrgb[i*3];
 	      cloud->points[i].g = mrgb[(i*3)+1];
 	      cloud->points[i].b = mrgb[(i*3)+2];  				
@@ -265,17 +268,40 @@ int main (int argc, char** argv)
       reg.setInputCloud (cloud_filtered);
       reg.setInputNormals (normals);
       reg.extract (clusters);
-      cout << clusters.size() << std::endl;
 
-      pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
-      
-      
-      if(!viewer->updatePointCloud (colored_cloud, "Kinect Cloud")){
-        viewer->addPointCloud<pcl::PointXYZRGB> (colored_cloud, "Kinect Cloud");
-        viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+
+      seg_cylinder.setInputCloud(cloud_filtered);
+      seg_cylinder.setInputNormals (normals);
+      seg_plane.setInputCloud(cloud_filtered);	
+
+
+
+      i = 0;
+      for(std::vector<pcl::PointIndices>::iterator
+	    cluster = clusters.begin(); 
+	  cluster != clusters.end();
+	  cluster++, i++){
+	
+	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
+
+	seg_cylinder.setIndices(clust);
+	seg_plane.setIndices(clust);
+
+	float fsize = clust->indices.size();
+	seg_cylinder.segment (*inliers_cylinder, *coefficients_cylinder);
+	seg_plane.segment (*inliers_plane, *coefficients_plane);
+	cout << "Cluster: "<< i << "Size: " << clust->indices.size() << endl  
+	     << "Cylinder: "
+	     << float(inliers_cylinder->indices.size())/fsize << endl
+	     << "Plane " 
+	     << float(inliers_plane->indices.size())/fsize
+	     << endl;
       }
-      viewer->spinOnce ();
+      pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
+      vis_cloud = colored_cloud;
+      //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
   }
+  thrd1.join();
   device->stopVideo();
   device->stopDepth();
   //devicetwo->stopVideo();
