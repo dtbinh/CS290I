@@ -59,6 +59,10 @@
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/point_types.h>
+#include <pcl/filters/fast_bilateral.h>
+#include <pcl/filters/project_inliers.h>
+#include <pcl/surface/convex_hull.h>
+#include <sstream>
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -124,13 +128,21 @@ MyFreenectDevice* device;
 // -----Main-----
 // --------------
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr vis_cloud;
-boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+
+boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > vis_meshes;
 
 void visualizerThread()
 {
+  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+  viewer->setBackgroundColor (0, 0, 0);
+  viewer->addCoordinateSystem (1.0);
+  viewer->initCameraParameters ();
+  std::vector<std::string> meshnames;
+
   while (!viewer->wasStopped ())
   {  
 
+    viewer->spinOnce ();
     
     if(vis_cloud){
       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
@@ -142,7 +154,24 @@ void visualizerThread()
 	  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
       }
     }
-    viewer->spinOnce ();
+    if(vis_meshes){
+      boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > meshes;
+      vis_meshes.swap(meshes);
+      int i = 0;
+      for(std::vector<std::string>::iterator it = meshnames.begin();
+          it != meshnames.end(); it++)
+         viewer->removePolygonMesh(*it);
+      meshnames.clear();
+      for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
+          it != meshes->end();
+          it++){
+       //viewer->removePolygonMesh("polygon"+i); 
+       std::stringstream ss;
+       ss << "polygon"<< i++;
+       meshnames.push_back(ss.str());
+       viewer->addPolygonMesh(**it, ss.str());
+      }
+    }
   }
 }
 
@@ -163,10 +192,6 @@ int main (int argc, char** argv)
   // Create and setup the viewer
   printf("Create the viewer.\n");
 
-  viewer->setBackgroundColor (0, 0, 0);
-  viewer->addCoordinateSystem (1.0);
-  viewer->initCameraParameters ();
-	
   //Voxelizer Setup
 	
   printf("Create the devices.\n");
@@ -179,30 +204,28 @@ int main (int argc, char** argv)
   vox.setLeafSize (30.0f, 30.0f, 30.0f);
 
   // Some region growing stuff
-  /*
   pcl::RegionGrowingRGB<pcl::PointXYZRGB> reg;
   reg.setSearchMethod (tree);
   reg.setDistanceThreshold (10);
   reg.setPointColorThreshold (6);
   reg.setRegionColorThreshold (6);
   reg.setMinClusterSize (600);
-  */
+
+
 
   pcl::PointCloud <pcl::Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
   pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normal_estimator;
   normal_estimator.setSearchMethod (tree);
-  normal_estimator.setKSearch (50);
+  normal_estimator.setKSearch (8);
 
-
+/*
   pcl::RegionGrowing<pcl::PointXYZRGB, pcl::Normal> reg;
-  reg.setMinClusterSize (500);
-  // reg.setMaxClusterSize (1000000);
+  reg.setMinClusterSize (50);
   reg.setSearchMethod (tree);
-  reg.setNumberOfNeighbours (30);
-  //reg.setIndices (indices);
-  reg.setSmoothnessThreshold (5.0 / 180.0 * M_PI);
-  reg.setCurvatureThreshold (2.0);
-
+  reg.setNumberOfNeighbours (8);
+  reg.setSmoothnessThreshold (30 / 180.0 * M_PI);
+  reg.setCurvatureThreshold (0.001);
+*/
   pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane;
   seg_plane.setOptimizeCoefficients (true);
   seg_plane.setModelType (pcl::SACMODEL_PLANE);
@@ -230,14 +253,21 @@ int main (int argc, char** argv)
   int iRealDepth = 0;
   int iTDepth = 0;
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-  
   pcl::ModelCoefficients::Ptr coefficients_plane (new pcl::ModelCoefficients);
   pcl::PointIndices::Ptr inliers_plane (new pcl::PointIndices);
   pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
   pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
 
+  
+  pcl::ConvexHull<pcl::PointXYZRGB> cHull;
+
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_proj (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::ProjectInliers<pcl::PointXYZRGB> proj;
+  proj.setModelType (pcl::SACMODEL_PLANE);
+
   printf("Start the main loop.\n");
-  while (!viewer->wasStopped ()){
+  while (1){
       device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
@@ -257,8 +287,15 @@ int main (int argc, char** argv)
 	      cloud->points[i].b = mrgb[(i*3)+2];  				
 	    }
 	}
-
-     
+/*
+      pcl::FastBilateralFilter<pcl::PointXYZRGB> fbf;
+      fbf.setSigmaS (10.0f);
+      fbf.setSigmaR (10.0f);
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_bfiltered (new pcl::PointCloud<pcl::PointXYZRGB> ());
+  
+      fbf.setInputCloud (cloud);
+      fbf.applyFilter (*cloud_bfiltered);   
+  */
       vox.setInputCloud (cloud);
       vox.filter (*cloud_filtered);
       
@@ -273,23 +310,35 @@ int main (int argc, char** argv)
       seg_cylinder.setInputCloud(cloud_filtered);
       seg_cylinder.setInputNormals (normals);
       seg_plane.setInputCloud(cloud_filtered);	
+      proj.setInputCloud (cloud_filtered);
 
 
 
       i = 0;
+
+      boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
+         meshes(new std::vector<pcl::PolygonMesh::Ptr>());
       for(std::vector<pcl::PointIndices>::iterator
 	    cluster = clusters.begin(); 
 	  cluster != clusters.end();
 	  cluster++, i++){
+        pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
 	
 	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
 
-	seg_cylinder.setIndices(clust);
+	//seg_cylinder.setIndices(clust);
 	seg_plane.setIndices(clust);
 
 	float fsize = clust->indices.size();
-	seg_cylinder.segment (*inliers_cylinder, *coefficients_cylinder);
+
 	seg_plane.segment (*inliers_plane, *coefficients_plane);
+	proj.setIndices(inliers_plane);
+        proj.setModelCoefficients (coefficients_plane);
+        proj.filter (*cloud_proj);
+        cHull.setInputCloud(cloud_proj);
+        cHull.reconstruct (*mesh);
+        meshes->push_back(mesh);
+
 	cout << "Cluster: "<< i << "Size: " << clust->indices.size() << endl  
 	     << "Cylinder: "
 	     << float(inliers_cylinder->indices.size())/fsize << endl
@@ -299,6 +348,7 @@ int main (int argc, char** argv)
       }
       pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
       vis_cloud = colored_cloud;
+      vis_meshes = meshes;
       //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
   }
   thrd1.join();
