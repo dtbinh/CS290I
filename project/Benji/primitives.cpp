@@ -45,8 +45,6 @@ class Matrix4X4 {
   public:
     GLdouble a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p;
     Matrix4X4(GLdouble a=0.0, GLdouble b=0.0, GLdouble c=0.0, GLdouble d=0.0, GLdouble e=0.0, GLdouble f=0.0, GLdouble g=0.0, GLdouble h=0.0, GLdouble i=0.0, GLdouble j=0.0, GLdouble k=0.0, GLdouble l=0.0, GLdouble m=0.0, GLdouble n=0.0, GLdouble o=0.0, GLdouble p=0.0);
-    Matrix4X4& operator=(const Matrix4X4& z){ a = z.a; b = z.b; c = z.c; d = z.d; e = z.e; f = z.f; g = z.g; h = z.h; i = z.i; j = z.j; k = z.k; l = z.l; m =z.m; n= z.n; o =z.o; p =z.p; return *this; }
-    GLdouble array(){ GLdouble result[]={a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p}; return *result; }
 };
 //setting matrix
 Matrix4X4::Matrix4X4 (GLdouble aa, GLdouble bb, GLdouble cc, GLdouble dd, GLdouble ee, GLdouble ff, GLdouble gg, GLdouble hh, GLdouble ii, GLdouble jj, GLdouble kk, GLdouble ll, GLdouble mm, GLdouble nn, GLdouble oo, GLdouble pp) {
@@ -72,10 +70,7 @@ class Vec3f {
   public:
     GLdouble x, y, z;
     Vec3f(GLdouble x=0.0, GLdouble y=0.0, GLdouble z=0.0);
-
-    Vec3f& operator=(const Vec3f& v)
-      { x = v.x; y = v.y; z = v.z; return *this; }
-
+    Vec3f operator=(const Vec3f&) const;
     Vec3f operator+(const Vec3f&) const;
     Vec3f operator-(const Vec3f&) const;
     Vec3f operator/(const GLdouble&) const;
@@ -88,6 +83,13 @@ Vec3f::Vec3f (GLdouble a, GLdouble b, GLdouble c) {
   y = b;
   z = c;
 }
+//= overload
+Vec3f Vec3f::operator= (const Vec3f& v) const
+{
+  Vec3f result(v.x, v.y, v.z);
+  return result;
+}
+
 ///define overload minus
 Vec3f Vec3f::operator- (const Vec3f& v) const
 {
@@ -123,6 +125,7 @@ class PRIMITIVE
   public:
     virtual ~PRIMITIVE(){}
     Vec3f COLOR;
+    Matrix4X4 TRANSFORMATION;
     virtual void draw_p() = 0;
 };
 
@@ -145,6 +148,8 @@ class PLANE:public PRIMITIVE{
     }
     void draw_p(){
       glPushMatrix();
+        glRotatef(90.0, 0.0, 1.0, 0.0);
+        glTranslatef(-3.5,0.0,4.0);
         glClear(GL_COLOR_BUFFER_BIT);
         glBegin(GL_TRIANGLE_FAN);
           glColor4f(0,1,0,1);
@@ -164,16 +169,17 @@ class SPHERE:public PRIMITIVE{
     Vec3f CENTER;
     float RADIUS;
   public:
-    SPHERE(Vec3f center, float radius, Vec3f color){
+    SPHERE(Vec3f center, Vec3f color, float radius, Matrix4X4 transformation){
       CENTER = center;
       COLOR = color;
       RADIUS = radius;
+      TRANSFORMATION = transformation;
     }
     void draw_p(){
       glPushMatrix();
-        glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
-        glTranslatef(CENTER.x, CENTER.y, CENTER.z);
-        glutSolidSphere(RADIUS,20.0,20.0);
+        glRotatef(90.0, 0.0, 1.0, 0.0);
+        glTranslatef(-3.5,0.0,4.0);
+        glutSolidSphere(1.0,10.0,10.0);
       glPopMatrix();
       return;
     } 
@@ -185,7 +191,6 @@ class CYLINDER:public PRIMITIVE{
     Vec3f CENTER;
     float RADIUS;
     float HEIGHT;
-    Matrix4X4 TRANSFORMATION;
     GLUquadric* qobj;
   public:
     CYLINDER(Vec3f center, Vec3f color, float radius, float height, Matrix4X4 transformation){
@@ -199,9 +204,9 @@ class CYLINDER:public PRIMITIVE{
     }
     void draw_p(){
       glPushMatrix();
-        const GLdouble p = TRANSFORMATION.array();
-        glMultMatrixd(&p);
-        gluCylinder(qobj,RADIUS,HEIGHT,20.0, 20.0,20.0);
+        glRotatef(90.0, 0.0, 1.0, 0.0);
+        glTranslatef(-3.5,0.0,4.0);
+        gluCylinder(qobj,RADIUS,HEIGHT,10.0, 10.0,10.0);
       glPopMatrix();
       return;
     } 
@@ -221,11 +226,11 @@ void display()
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
 
-
-  Vec3f center (-1, 0, 0);
-  Vec3f color (1.0, 0, 0);
-  SPHERE temp(center, .1, color);
-  temp.draw_p();
+  glPushMatrix();
+  glRotatef(90.0, 0.0, 1.0, 0.0);
+  glTranslatef(-3.5,0.0,4.0);
+  glutSolidSphere(1.0,10.0,10.0);
+  glPopMatrix();
   
   glutSwapBuffers();
 }
@@ -390,13 +395,12 @@ int main(int argc, char** argv)
 {
   
   //set camera eye and center to start in the maze
-  eyeX = 0;
-  eyeY = 0;
-  eyeZ = 5;
-  centerX = 0;
-  centerY = 0;
-  centerZ = 0;
-  
+  eyeX = 0.0;
+  eyeY = 0.0;
+  eyeZ = 3.5;
+  centerX = 100.0;
+  centerY = 0.0;
+  centerZ = 0.0;
 
   glutInit(&argc, argv);
   glutInitWindowSize(600,600);

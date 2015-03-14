@@ -1,0 +1,30 @@
+Benji Lampel
+Project 290i
+W15
+
+Outline:
+
+I am working on the application/user end of the project. My first steps are to begin implementing,
+in OpenGL, some of the graphic (AR) effects. This includes realistic fire. My first iteration of
+making fire in OpenGL will consist of small spheres acting as particles, moving upwards at a constant
+rate, with the motion due in part to an implementation of Perlin Noise in a viewing window. As they 
+move up, they will change color with their associated heat from white to yellow to orange to red.
+The first implementation will be in 2d.
+
+A brief venture into using SDL for graphics was made, but I could not get even the example to
+compile and run due to issues with SDL2. No further time will be spent on SDL2.
+
+A simple example of my working implementation of the Perlin algorithm displays 100 circles in a grid,
+where each circle is colored based on its value from the Perlin algorithm.
+
+Currently the program only works with a max of ~100 particles. Segfaults when there are much more.
+Possible memory allocation issue.
+
+Sources:
+
+[0] Perlin Noise - http://en.wikipedia.org/wiki/Perlin_noise
+[1] Initializing the gradients - http://stackoverflow.com/questions/6283080/random-unit-vector-in-multi-dimensional-space
+[2] Getting SDL to work - https://brendanwhitfield.wordpress.com/2015/02/26/ 
+[3] Fire ideas - http://stackoverflow.com/questions/4450171/rendering-fire-in-opengl
+[4] Simple particle engine - https://classes.soe.ucsc.edu/cmps161/Winter09/projects/galbrech/finalproposal.html
+[5] compiling issues - http://stackoverflow.com/questions/13703647/how-to-properly-add-include-directories-with-cmake
