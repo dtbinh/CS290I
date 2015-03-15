@@ -320,10 +320,6 @@ int main (int argc, char** argv)
     normal_estimator.compute (*normals);
     reg.setInputCloud (cloud_filtered);
     reg.setInputNormals (normals);
-
-    seg_cylinder.setInputCloud(cloud_filtered);
-    seg_cylinder.setInputNormals (normals);
-
     proj.setInputCloud (cloud_filtered);
 
 
@@ -362,8 +358,9 @@ int main (int argc, char** argv)
       inlier_size = inliers_plane->indices.size();
     }
 
-	  extract_neg.setIndices(inliers_plane);
-	  extract_neg.filter(*outliers);
+    seg_cylinder.setInputCloud(outliers);
+    seg_cylinder.setInputNormals(normals);
+
 
     pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
     vis_cloud = colored_cloud;
