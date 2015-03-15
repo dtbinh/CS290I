@@ -349,18 +349,15 @@ int main (int argc, char** argv)
       if(inlier_size > threshold){
 	proj.setIndices(inliers);
 	proj.setModelCoefficients (coefficients);
-      proj.filter (*cloud_proj);
-      cHull.setInputCloud(cloud_proj);
-      cHull.reconstruct (*mesh);
-      meshes->push_back(mesh);
+        proj.filter (*cloud_proj);
+        cHull.setInputCloud(cloud_proj);
+        cHull.reconstruct (*mesh);
+        meshes->push_back(mesh);
       }
 
       extract_neg.setInputCloud(outliers);
       extract_neg.setIndices(inliers);
       extract_neg.filter(*outliers);
-
-      seg_plane.setInputCloud(outliers);
-      seg_plane.segment (*inliers_plane, *coefficients_plane);
 
       extract_neg_normal.setInputCloud(normals);
       extract_neg_normal.setIndices(inliers);
@@ -377,7 +374,7 @@ int main (int argc, char** argv)
       
       if(inlier_size > 0){
 	
-    }
+      }
 
       extract_neg.setInputCloud(outliers);
       extract_neg.setIndices(inliers);
