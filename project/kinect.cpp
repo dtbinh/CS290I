@@ -134,6 +134,8 @@ MyFreenectDevice* device;
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr vis_cloud;
 
 boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > vis_meshes;
+boost::shared_ptr<std::vector<pcl::ModelCoefficients::Ptr> > 
+  vis_spheres(new std::vector<pcl::ModelCoefficients::Ptr>());
 
 void visualizerThread()
 {
@@ -179,6 +181,33 @@ void visualizerThread()
 	    (pcl::visualization::PCL_VISUALIZER_COLOR, (rand()%256)/256.0f,(rand()%256)/256.0f,(rand()%256)/256.0f, ss.str());
 	}
       }
+      if(vis_spheres){
+	boost::shared_ptr<std::vector<pcl::ModelCoefficients::Ptr> > 
+	  spheres(new std::vector<pcl::ModelCoefficients::Ptr>());
+	vis_spheres.swap(spheres);
+       	
+	int i = 0;
+	for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
+	      spheres->begin();
+	    it != spheres->end();
+	    it++)
+	  {
+	    std::stringstream ss;
+	    ss << "shape"<< i++;
+
+	    if(!viewer->updateSphere(pcl::PointXYZ((*it)->values[0],
+						   (*it)->values[1],
+						   (*it)->values[2]),
+				     (*it)->values[3], 1,0,0,ss.str()))
+				     
+	      viewer->addSphere(pcl::PointXYZ((*it)->values[0],
+					      (*it)->values[1],
+					      (*it)->values[2]),
+				(*it)->values[3],
+				1,0,0,ss.str());
+	    cout << (*it)->values[3];
+	  }
+      }
     }
 }
 
@@ -223,7 +252,7 @@ int main (int argc, char** argv)
   pcl::PointCloud <pcl::Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
   pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normal_estimator;
   normal_estimator.setSearchMethod (tree);
-  normal_estimator.setKSearch (8);
+  normal_estimator.setKSearch (20);
 
   /*
     pcl::RegionGrowing<pcl::PointXYZRGB, pcl::Normal> reg;
@@ -245,16 +274,17 @@ int main (int argc, char** argv)
   seg_cylinder.setMethodType (pcl::SAC_RANSAC);
   seg_cylinder.setNormalDistanceWeight (0.1);
   seg_cylinder.setMaxIterations (100);
-  seg_cylinder.setDistanceThreshold (100000);
-  seg_cylinder.setRadiusLimits (0, 100000);
+  seg_cylinder.setDistanceThreshold (0.05);
+  seg_cylinder.setRadiusLimits (0, 0.1);
+
  
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_sphere;
   seg_sphere.setModelType (pcl::SACMODEL_SPHERE);
   seg_sphere.setMethodType (pcl::SAC_RANSAC);
-  seg_sphere.setNormalDistanceWeight (0.01);
+  seg_sphere.setNormalDistanceWeight (0.1);
   seg_sphere.setMaxIterations (10000);
   seg_sphere.setDistanceThreshold (5);
-  seg_sphere.setRadiusLimits (0, 1); 
+  seg_sphere.setRadiusLimits (0, 1000); 
 
  
   boost::thread thrd1(
@@ -323,8 +353,14 @@ int main (int argc, char** argv)
 
     proj.setInputCloud (cloud_filtered);
 
+
+
+
+
     boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
       meshes(new std::vector<pcl::PolygonMesh::Ptr>());
+    boost::shared_ptr<std::vector<pcl::ModelCoefficients::Ptr> > 
+      spheres(new std::vector<pcl::ModelCoefficients::Ptr>());
  
     int inlier_size;
 
@@ -345,6 +381,14 @@ int main (int argc, char** argv)
         cHull.setInputCloud(cloud_proj);
         cHull.reconstruct (*mesh);
         meshes->push_back(mesh);
+	
+	extract_neg.setInputCloud(outliers);
+	extract_neg.setIndices(inliers);
+	extract_neg.filter(*outliers);
+	
+	extract_neg_normal.setInputCloud(normals);
+	extract_neg_normal.setIndices(inliers);
+	extract_neg_normal.filter(*normals);
       }
 
       extract_neg.setInputCloud(outliers);
@@ -357,27 +401,27 @@ int main (int argc, char** argv)
 
       inlier_size = inliers->indices.size();
     }while(inlier_size > threshold);
-     
+    i = 0;
     do{
+      pcl::ModelCoefficients::Ptr coefficients_sphere (new pcl::ModelCoefficients);
       seg_sphere.setInputCloud(outliers);
       seg_sphere.setInputNormals(normals);
-      seg_sphere.segment (*inliers, *coefficients);
+      seg_sphere.segment (*inliers, *coefficients_sphere);
       inlier_size = inliers->indices.size();
       
-      if(inlier_size > 0){
-	
-      }
+      if(inlier_size > 100){
+	cout << "sphere:" << i++ << " " << inlier_size << endl;
+	spheres->push_back(coefficients_sphere);
+	extract_neg.setInputCloud(outliers);
+	extract_neg.setIndices(inliers);
+	extract_neg.filter(*outliers);
 
-      extract_neg.setInputCloud(outliers);
-      extract_neg.setIndices(inliers);
-      extract_neg.filter(*outliers);
-
-      extract_neg_normal.setInputCloud(normals);
-      extract_neg_normal.setIndices(inliers);
-      extract_neg_normal.filter(*normals);
-      
-      inlier_size = inliers->indices.size();
-    }while(inlier_size > 0);
+	extract_neg_normal.setInputCloud(normals);
+	extract_neg_normal.setIndices(inliers);
+	extract_neg_normal.filter(*normals);
+      }      
+     
+    }while(inlier_size > 100);
 
     
     seg_cylinder.setInputCloud(outliers);
@@ -398,9 +442,12 @@ int main (int argc, char** argv)
     extract_neg_normal.setIndices(inliers_cylinder);
     extract_neg_normal.filter(*normals);
 
+
     pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
     vis_cloud = colored_cloud;
     vis_meshes = meshes;
+    if(spheres->size())
+      vis_spheres = spheres;
 
   }
   thrd1.join();
