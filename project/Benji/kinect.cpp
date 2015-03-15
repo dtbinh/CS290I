@@ -27,7 +27,7 @@
  * 
  * 
  */
-
+#include "primitives.hpp"
 #include <iostream>
 #include "freenect_fix.hpp"
 #include <libfreenect/libfreenect_registration.h>
@@ -65,6 +65,7 @@
 #include <sstream>
 #include <GL/glut.h>
 
+
 //Global for main loop so openGL
 bool GO = false;
 
@@ -72,10 +73,12 @@ bool GO = false;
 //global vars for camera (GL)
 GLdouble eyeX = 0.0;
 GLdouble eyeY = 0.0;
-GLdouble eyeZ = 3.5;
-GLdouble centerX = 100.0;
+GLdouble eyeZ = 5.0;
+GLdouble centerX = 0.0;
 GLdouble centerY = 0.0;
 GLdouble centerZ = 0.0;
+
+std::vector<PRIMITIVE*> items;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -202,21 +205,17 @@ void idle() {
 }
 
 void display() {
-	glClearColor(0,0,0,0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//set matrix to default
-	glLoadIdentity();
-	//set what we are looking at
-	gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
-	glPushMatrix();
-		glColor3f(1.0, 1.0, 1.0);
-		glRotatef(90.0, 0.0, 1.0, 0.0);
-		glTranslatef(-3.5, 0.0, 4.0);
-		glutSolidSphere(1.0, 10.0, 10.0);
-	glPopMatrix();
-			 
-	glutSwapBuffers();
-	glutPostRedisplay();
+  glClearColor(0,0,0,0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  //set matrix to default
+  glLoadIdentity();
+  //set what we are looking at
+  gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
+
+  for (int i = 0; i < items.size(); i++){
+    items[i]->draw_p();
+  }
+  glutSwapBuffers();
 }
 
 void keyboard(unsigned char key, int x, int y) {
@@ -230,21 +229,46 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void glutThread() {
-	//OpenGL setup
-	glutInitWindowSize(600,600);
-  glutInitWindowPosition(100, 100);
-  glutCreateWindow("OpenGL Visualization");
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 
+  GLdouble m[16]= {1,0,0,0,
+                   0,1,0,0,
+                   0,0,1,0,
+                   1,0,0,1};
+  
+  int capacity = 10;
+  std::vector<Vec3f> points;
+  points.reserve(capacity);
+  for (int i = 0; i < capacity; i++){
+    float bob = i*6.28/capacity;
+    points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
+  }
+
+  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
+//  CYLINDER temp2(Vec3f(0,0,1), .1, .1);
+//  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
+
+
+  items.push_back (&temp);  
+//  items.push_back (&temp2);  
+  items.push_back (&temp3);  
+ 
+
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
+  glutInitWindowSize(600,600);
+  glutInitWindowPosition(100, 100);
+  glutCreateWindow("Final OpenGL");
+
 
   glutDisplayFunc(display);
-  //glutMotionFunc(mouseMotion);
-  //glutMouseFunc(mouseButton);
-  glutKeyboardFunc(keyboard);
+//  glutMotionFunc(mouseMotion);
+//  glutMouseFunc(mouseButton);
+//  glutMotionFunc(mouseMotion);
+//  glutKeyboardFunc(keyboard);
   glutIdleFunc(idle);
   glutReshapeFunc(reshape);
-	glutMainLoop();
+  glutMainLoop();
 }
 
 int main (int argc, char** argv)
