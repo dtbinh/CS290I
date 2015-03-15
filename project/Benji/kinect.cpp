@@ -61,12 +61,8 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/fast_bilateral.h>
 #include <pcl/filters/project_inliers.h>
-#include <pcl/surface/concave_hull.h>
 #include <pcl/surface/convex_hull.h>
-#include <pcl/filters/extract_indices.h>
 #include <sstream>
-
-int threshold = 1500;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -230,25 +226,19 @@ int main (int argc, char** argv)
   reg.setSmoothnessThreshold (30 / 180.0 * M_PI);
   reg.setCurvatureThreshold (0.001);
 */
-  pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane;
+  //pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane;
+  pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_plane;
   seg_plane.setOptimizeCoefficients (true);
-  seg_plane.setModelType (pcl::SACMODEL_PLANE);
+  seg_plane.setModelType (pcl::SACMODEL_NORMAL_PLANE);
   seg_plane.setMethodType (pcl::SAC_RANSAC);
-  seg_plane.setDistanceThreshold (20);
+  seg_plane.setDistanceThreshold (0.03); //10
   seg_plane.setMaxIterations (100);
-
-  pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane2;
-  seg_plane2.setOptimizeCoefficients (true);
-  seg_plane2.setModelType (pcl::SACMODEL_PLANE);
-  seg_plane2.setMethodType (pcl::SAC_RANSAC);
-  seg_plane2.setDistanceThreshold (20);
-  seg_plane2.setMaxIterations (100);
   
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_cylinder;
   seg_cylinder.setModelType (pcl::SACMODEL_CYLINDER);
   seg_cylinder.setMethodType (pcl::SAC_RANSAC);
   seg_cylinder.setNormalDistanceWeight (0.1);
-  seg_cylinder.setMaxIterations (100);
+  seg_cylinder.setMaxIterations (10000);
   seg_cylinder.setDistanceThreshold (0.05);
   seg_cylinder.setRadiusLimits (0, 0.1);
   
@@ -271,18 +261,12 @@ int main (int argc, char** argv)
 
   
   pcl::ConvexHull<pcl::PointXYZRGB> cHull;
-  pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr voronoi_centers1 (new pcl::PointCloud<pcl::PointXYZRGB>);
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_proj (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::ProjectInliers<pcl::PointXYZRGB> proj;
   proj.setModelType (pcl::SACMODEL_PLANE);
 
-  pcl::ExtractIndices<pcl::PointXYZRGB> extract_neg;
-  extract_neg.setNegative(true);
-  
   printf("Start the main loop.\n");
   while (1){
       device->updateState();
@@ -326,10 +310,9 @@ int main (int argc, char** argv)
 
       seg_cylinder.setInputCloud(cloud_filtered);
       seg_cylinder.setInputNormals (normals);
-
+      seg_plane.setInputCloud(cloud_filtered);	
+			seg_plane.setInputNormals(normals);
       proj.setInputCloud (cloud_filtered);
-
-      seg_plane.setInputCloud(cloud_filtered);
 
 
 
@@ -337,27 +320,20 @@ int main (int argc, char** argv)
 
       boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
          meshes(new std::vector<pcl::PolygonMesh::Ptr>());
-
       for(std::vector<pcl::PointIndices>::iterator
 	    cluster = clusters.begin(); 
 	  cluster != clusters.end();
-	  cluster++){
-
-	int fsize = 65536;
-
+	  cluster++, i++){
+        pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
 	
 	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
 
 	//seg_cylinder.setIndices(clust);
 	seg_plane.setIndices(clust);
 
-	seg_plane.segment (*inliers_plane, *coefficients_plane);
-	fsize = inliers_plane->indices.size();
-	extract_neg.setInputCloud(cloud_filtered);
+	float fsize = clust->indices.size();
 
-	int j = 0;
-	while(fsize > threshold){	  
-	  pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
+	seg_plane.segment (*inliers_plane, *coefficients_plane);
 	proj.setIndices(inliers_plane);
         proj.setModelCoefficients (coefficients_plane);
         proj.filter (*cloud_proj);
@@ -365,28 +341,12 @@ int main (int argc, char** argv)
         cHull.reconstruct (*mesh);
         meshes->push_back(mesh);
 
-
-	    /* 
-              << endl  
+	cout << "Cluster: "<< i << "Size: " << clust->indices.size() << endl  
 	     << "Cylinder: "
 	     << float(inliers_cylinder->indices.size())/fsize << endl
 	     << "Plane " 
 	     << float(inliers_plane->indices.size())/fsize
-	       << endl << endl;
-	    */
-	  extract_neg.setIndices(inliers_plane);
-	  extract_neg.filter(*outliers);
-
-	  seg_plane2.setInputCloud(outliers);
-	  seg_plane2.segment (*inliers_plane, *coefficients_plane);
-	  
-	  extract_neg.setInputCloud(outliers);
-
-	  cout << "Cluster: "<< i << " " << j++ << "Size: " << fsize << " " << outliers->size()<< " " << inliers_plane->indices.size() << endl;
-	  fsize = inliers_plane->indices.size();
-
-	}
-        i++;
+	     << endl;
       }
       pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
       vis_cloud = colored_cloud;
