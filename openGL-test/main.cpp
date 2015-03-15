@@ -116,7 +116,6 @@ class PLANE:public PRIMITIVE{
     }
     void draw_p(){
       glPushMatrix();
-        glClear(GL_COLOR_BUFFER_BIT);
         glBegin(GL_TRIANGLE_FAN);
           glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
  	  for (int i = 0; i < POINTS.size(); i++){
@@ -388,12 +387,12 @@ int main(int argc, char** argv)
  
 
   glutInit(&argc, argv);
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+  glEnable(GL_DEPTH_TEST);
   glutInitWindowSize(600,600);
   glutInitWindowPosition(100, 100);
   glutCreateWindow("Final OpenGL");
 
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
-  glEnable(GL_DEPTH_TEST);
 
   glutDisplayFunc(display);
   glutMotionFunc(mouseMotion);
