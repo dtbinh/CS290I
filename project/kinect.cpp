@@ -376,11 +376,14 @@ int main (int argc, char** argv)
 	  
 	  extract_neg.setInputCloud(outliers);
 
+
 	  cout << "Cluster: "<< i << " " << j++ << "Size: " << fsize << " " << outliers->size()<< " " << inliers_plane->indices.size() << endl;
 	  fsize = inliers_plane->indices.size();
 
 	}
         i++;
+
+
   //    }
       pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
       vis_cloud = colored_cloud;
