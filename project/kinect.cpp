@@ -66,7 +66,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <sstream>
 
-int threshold = 1500;
+int threshold = 500;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -174,6 +174,8 @@ void visualizerThread()
        ss << "polygon"<< i++;
        meshnames.push_back(ss.str());
        viewer->addPolygonMesh(**it, ss.str());
+       viewer->setPointCloudRenderingProperties 
+	  (pcl::visualization::PCL_VISUALIZER_COLOR, (rand()%256)/256.0f,(rand()%256)/256.0f,(rand()%256)/256.0f, ss.str());
       }
     }
   }
