@@ -236,14 +236,14 @@ int main (int argc, char** argv)
   seg_plane.setOptimizeCoefficients (true);
   seg_plane.setModelType (pcl::SACMODEL_PLANE);
   seg_plane.setMethodType (pcl::SAC_RANSAC);
-  seg_plane.setDistanceThreshold (20);
+  seg_plane.setDistanceThreshold (10);
   seg_plane.setMaxIterations (100);
 
   pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane2;
   seg_plane2.setOptimizeCoefficients (true);
   seg_plane2.setModelType (pcl::SACMODEL_PLANE);
   seg_plane2.setMethodType (pcl::SAC_RANSAC);
-  seg_plane2.setDistanceThreshold (20);
+  seg_plane2.setDistanceThreshold (10);
   seg_plane2.setMaxIterations (100);
   
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_cylinder;
@@ -278,7 +278,6 @@ int main (int argc, char** argv)
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_proj (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::ProjectInliers<pcl::PointXYZRGB> proj;
   proj.setModelType (pcl::SACMODEL_PLANE);
 
@@ -287,6 +286,7 @@ int main (int argc, char** argv)
   
   printf("Start the main loop.\n");
   while (1){
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
       device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
@@ -382,7 +382,7 @@ int main (int argc, char** argv)
 	}
         i++;
   //    }
-      pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
+      pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
       vis_cloud = colored_cloud;
       vis_meshes = meshes;
       //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
