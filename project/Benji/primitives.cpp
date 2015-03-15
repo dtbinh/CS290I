@@ -84,10 +84,9 @@ void SPHERE::draw_p(){
       glPopMatrix();
       return;
 } 
-/*
+
 //CYLINDER::CYLINDER(Vec3f center, Vec3f color, float radius, float height ){
-CYLINDER::CYLINDER(Vec3f center, Vec3f color, float radius, float height, GLdouble transformation[16] ){
-  CENTER = center;
+CYLINDER::CYLINDER( Vec3f color, float radius, float height, GLdouble* transformation ){
   COLOR = color;
   RADIUS = radius;
   HEIGHT = height;
@@ -104,4 +103,4 @@ void CYLINDER::draw_p(){
         gluCylinder(qobj,RADIUS,HEIGHT,20.0, 20.0,20.0);
       glPopMatrix();
       return;
-} */
+}

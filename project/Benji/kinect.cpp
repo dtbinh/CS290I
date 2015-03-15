@@ -244,13 +244,12 @@ void glutThread() {
   }
 
   SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
-//  CYLINDER temp2(Vec3f(0,0,1), .1, .1);
-//  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
   PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
 
 
   items.push_back (&temp);  
-//  items.push_back (&temp2);  
+  items.push_back (&temp2);  
   items.push_back (&temp3);  
  
 

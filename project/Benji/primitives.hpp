@@ -64,19 +64,17 @@ class SPHERE:public PRIMITIVE{
     void draw_p();
     virtual ~SPHERE() {}
 };
-/*
+
 class CYLINDER:public PRIMITIVE{
   private:
-    Vec3f CENTER;
     float RADIUS;
     float HEIGHT;
     GLdouble TRANSFORMATION[16];
     GLUquadric* qobj;
   public:
-//    CYLINDER(Vec3f color, float radius, float height);
-    CYLINDER(Vec3f color, float radius, float height, GLdouble transformation[16]);
+    CYLINDER(Vec3f color, float radius, float height, GLdouble* transformation);
     void draw_p();
     virtual ~CYLINDER() {}
 };
-*/
+
 #endif
