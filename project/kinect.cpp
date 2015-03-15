@@ -144,41 +144,42 @@ void visualizerThread()
   std::vector<std::string> meshnames;
 
   while (!viewer->wasStopped ())
-  {  
+    {  
 
-    viewer->spinOnce ();
+      viewer->spinOnce ();
     
-    if(vis_cloud){
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
-      vis_cloud.swap(cloud);
+      if(vis_cloud){
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+	vis_cloud.swap(cloud);
 
-      if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
-	viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
-	viewer->setPointCloudRenderingProperties 
-	  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+	if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
+	  viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
+	  viewer->setPointCloudRenderingProperties 
+	    (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+	}
+      }
+      if(vis_meshes){
+	boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > meshes;
+	vis_meshes.swap(meshes);
+
+	int i = 0;
+	for(std::vector<std::string>::iterator it = meshnames.begin();
+	    it != meshnames.end(); it++)
+	  viewer->removePolygonMesh(*it);
+	meshnames.clear();
+	for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
+	    it != meshes->end();
+	    it++){
+	  //viewer->removePolygonMesh("polygon"+i); 
+	  std::stringstream ss;
+	  ss << "polygon"<< i++;
+	  meshnames.push_back(ss.str());
+	  viewer->addPolygonMesh(**it, ss.str());
+	  viewer->setPointCloudRenderingProperties 
+	    (pcl::visualization::PCL_VISUALIZER_COLOR, (rand()%256)/256.0f,(rand()%256)/256.0f,(rand()%256)/256.0f, ss.str());
+	}
       }
     }
-    if(vis_meshes){
-      boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > meshes;
-      vis_meshes.swap(meshes);
-      int i = 0;
-      for(std::vector<std::string>::iterator it = meshnames.begin();
-          it != meshnames.end(); it++)
-         viewer->removePolygonMesh(*it);
-      meshnames.clear();
-      for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
-          it != meshes->end();
-          it++){
-       //viewer->removePolygonMesh("polygon"+i); 
-       std::stringstream ss;
-       ss << "polygon"<< i++;
-       meshnames.push_back(ss.str());
-       viewer->addPolygonMesh(**it, ss.str());
-       viewer->setPointCloudRenderingProperties 
-	  (pcl::visualization::PCL_VISUALIZER_COLOR, (rand()%256)/256.0f,(rand()%256)/256.0f,(rand()%256)/256.0f, ss.str());
-      }
-    }
-  }
 }
 
 int main (int argc, char** argv)
@@ -224,14 +225,14 @@ int main (int argc, char** argv)
   normal_estimator.setSearchMethod (tree);
   normal_estimator.setKSearch (8);
 
-/*
-  pcl::RegionGrowing<pcl::PointXYZRGB, pcl::Normal> reg;
-  reg.setMinClusterSize (50);
-  reg.setSearchMethod (tree);
-  reg.setNumberOfNeighbours (8);
-  reg.setSmoothnessThreshold (30 / 180.0 * M_PI);
-  reg.setCurvatureThreshold (0.001);
-*/
+  /*
+    pcl::RegionGrowing<pcl::PointXYZRGB, pcl::Normal> reg;
+    reg.setMinClusterSize (50);
+    reg.setSearchMethod (tree);
+    reg.setNumberOfNeighbours (8);
+    reg.setSmoothnessThreshold (30 / 180.0 * M_PI);
+    reg.setCurvatureThreshold (0.001);
+  */
   pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane;
   seg_plane.setOptimizeCoefficients (true);
   seg_plane.setModelType (pcl::SACMODEL_PLANE);
@@ -239,13 +240,6 @@ int main (int argc, char** argv)
   seg_plane.setDistanceThreshold (10);
   seg_plane.setMaxIterations (100);
 
-  pcl::SACSegmentation<pcl::PointXYZRGB> seg_plane2;
-  seg_plane2.setOptimizeCoefficients (true);
-  seg_plane2.setModelType (pcl::SACMODEL_PLANE);
-  seg_plane2.setMethodType (pcl::SAC_RANSAC);
-  seg_plane2.setDistanceThreshold (10);
-  seg_plane2.setMaxIterations (100);
-  
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_cylinder;
   seg_cylinder.setModelType (pcl::SACMODEL_CYLINDER);
   seg_cylinder.setMethodType (pcl::SAC_RANSAC);
@@ -253,9 +247,19 @@ int main (int argc, char** argv)
   seg_cylinder.setMaxIterations (100);
   seg_cylinder.setDistanceThreshold (0.05);
   seg_cylinder.setRadiusLimits (0, 0.1);
-  
+
+ 
+  pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_sphere;
+  seg_sphere.setModelType (pcl::SACMODEL_CYLINDER);
+  seg_sphere.setMethodType (pcl::SAC_RANSAC);
+  seg_sphere.setNormalDistanceWeight (0.1);
+  seg_sphere.setMaxIterations (100);
+  seg_sphere.setDistanceThreshold (0.05);
+  seg_sphere.setRadiusLimits (0, 0.1); 
+
+ 
   boost::thread thrd1(
-    boost::bind(&visualizerThread));
+		      boost::bind(&visualizerThread));
   //--------------------
   // -----Main loop-----
   //--------------------
@@ -282,110 +286,90 @@ int main (int argc, char** argv)
   proj.setModelType (pcl::SACMODEL_PLANE);
 
   pcl::ExtractIndices<pcl::PointXYZRGB> extract_neg;
+  pcl::ExtractIndices<pcl::Normal> extract_neg_normal;
   extract_neg.setNegative(true);
   
   printf("Start the main loop.\n");
   while (1){
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
-      device->updateState();
-      device->getDepth(mdepth);
-      device->getRGB(mrgb);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
+    device->updateState();
+    device->getDepth(mdepth);
+    device->getRGB(mrgb);
 		
-      size_t i = 0;
-      for (size_t v=0 ; v<480 ; v++)
-    	{
-	  for ( size_t u=0 ; u<640 ; u++, i++)
-	    {
-	      iRealDepth = mdepth[i];
-	      freenect_camera_to_world(device->getDevice(), u, v, iRealDepth, &x, &y);
-	      cloud->points[i].x  = x;
-	      cloud->points[i].y  = y;
-	      cloud->points[i].z = iRealDepth;
-	      cloud->points[i].r = mrgb[i*3];
-	      cloud->points[i].g = mrgb[(i*3)+1];
-	      cloud->points[i].b = mrgb[(i*3)+2];  				
-	    }
-	}
-/*
-      pcl::FastBilateralFilter<pcl::PointXYZRGB> fbf;
-      fbf.setSigmaS (10.0f);
-      fbf.setSigmaR (10.0f);
-      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_bfiltered (new pcl::PointCloud<pcl::PointXYZRGB> ());
-  
-      fbf.setInputCloud (cloud);
-      fbf.applyFilter (*cloud_bfiltered);   
-  */
-      vox.setInputCloud (cloud);
-      vox.filter (*cloud_filtered);
+    size_t i = 0;
+    for (size_t v=0 ; v<480 ; v++)
+      {
+	for ( size_t u=0 ; u<640 ; u++, i++)
+	  {
+	    iRealDepth = mdepth[i];
+	    freenect_camera_to_world(device->getDevice(), u, v, iRealDepth, &x, &y);
+	    cloud->points[i].x  = x;
+	    cloud->points[i].y  = y;
+	    cloud->points[i].z = iRealDepth;
+	    cloud->points[i].r = mrgb[i*3];
+	    cloud->points[i].g = mrgb[(i*3)+1];
+	    cloud->points[i].b = mrgb[(i*3)+2];  				
+	  }
+      }
+
+    vox.setInputCloud (cloud);
+    vox.filter (*cloud_filtered);
       
-      std::vector <pcl::PointIndices> clusters;
-      normal_estimator.setInputCloud (cloud_filtered);
-      normal_estimator.compute (*normals);
-      reg.setInputCloud (cloud_filtered);
-      reg.setInputNormals (normals);
-//      reg.extract (clusters);
+    std::vector <pcl::PointIndices> clusters;
+    normal_estimator.setInputCloud (cloud_filtered);
+    normal_estimator.compute (*normals);
+    reg.setInputCloud (cloud_filtered);
+    reg.setInputNormals (normals);
 
+    seg_cylinder.setInputCloud(cloud_filtered);
+    seg_cylinder.setInputNormals (normals);
 
-      seg_cylinder.setInputCloud(cloud_filtered);
-      seg_cylinder.setInputNormals (normals);
-
-      proj.setInputCloud (cloud_filtered);
-
-      seg_plane.setInputCloud(cloud_filtered);
+    proj.setInputCloud (cloud_filtered);
 
 
 
-      i = 0;
 
-      boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
-         meshes(new std::vector<pcl::PolygonMesh::Ptr>());
 
-//      for(std::vector<pcl::PointIndices>::iterator
-//	    cluster = clusters.begin(); 
-//	  cluster != clusters.end();
-//	  cluster++){
-
-	int fsize = 65536;
+    boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
+      meshes(new std::vector<pcl::PolygonMesh::Ptr>());
+ 
+    int inlier_size;
 
 	
-//	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
+    seg_plane.setInputCloud(cloud_filtered);    
+    seg_plane.segment (*inliers_plane, *coefficients_plane);
+    inlier_size = inliers_plane->indices.size();
+    extract_neg.setInputCloud(cloud_filtered);
+    
+    while(inlier_size > threshold){	  
+      pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
+      proj.setIndices(inliers_plane);
+      proj.setModelCoefficients (coefficients_plane);
+      proj.filter (*cloud_proj);
+      cHull.setInputCloud(cloud_proj);
+      cHull.reconstruct (*mesh);
+      meshes->push_back(mesh);
 
-	//seg_cylinder.setIndices(clust);
-//	seg_plane.setIndices(clust);
+      extract_neg.setIndices(inliers_plane);
+      extract_neg.filter(*outliers);
 
-	seg_plane.segment (*inliers_plane, *coefficients_plane);
-	fsize = inliers_plane->indices.size();
-	extract_neg.setInputCloud(cloud_filtered);
+      seg_plane.setInputCloud(outliers);
+      seg_plane.segment (*inliers_plane, *coefficients_plane);
 
-	int j = 0;
-	while(fsize > threshold){	  
-	  pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
-  	  proj.setIndices(inliers_plane);
-          proj.setModelCoefficients (coefficients_plane);
-          proj.filter (*cloud_proj);
-          cHull.setInputCloud(cloud_proj);
-          cHull.reconstruct (*mesh);
-          meshes->push_back(mesh);
+      extract_neg_normal.setInputCloud(normals);
+      extract_neg_normal.setIndices(inliers_plane);
+      extract_neg_normal.filter(*normals);
+
+      extract_neg.setInputCloud(outliers);
+      
+      inlier_size = inliers_plane->indices.size();
+    }
 
 
-	  extract_neg.setIndices(inliers_plane);
-	  extract_neg.filter(*outliers);
+    pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
+    vis_cloud = colored_cloud;
+    vis_meshes = meshes;
 
-	  seg_plane2.setInputCloud(outliers);
-	  seg_plane2.segment (*inliers_plane, *coefficients_plane);
-	  
-	  extract_neg.setInputCloud(outliers);
-
-	  cout << "Cluster: "<< i << " " << j++ << "Size: " << fsize << " " << outliers->size()<< " " << inliers_plane->indices.size() << endl;
-	  fsize = inliers_plane->indices.size();
-
-	}
-        i++;
-  //    }
-      pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
-      vis_cloud = colored_cloud;
-      vis_meshes = meshes;
-      //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
   }
   thrd1.join();
   device->stopVideo();
