@@ -334,11 +334,11 @@ int main (int argc, char** argv)
     boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
       meshes(new std::vector<pcl::PolygonMesh::Ptr>());
  
-    int inlier_size = threshold + 1;
+    int inlier_size;
 
 	
     outliers = cloud_filtered;
- 
+    
     do{
       pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
       
@@ -349,23 +349,26 @@ int main (int argc, char** argv)
       if(inlier_size > threshold){
 	proj.setIndices(inliers);
 	proj.setModelCoefficients (coefficients);
-	proj.filter (*cloud_proj);
-	cHull.setInputCloud(cloud_proj);
-	cHull.reconstruct (*mesh);
-	meshes->push_back(mesh);
+      proj.filter (*cloud_proj);
+      cHull.setInputCloud(cloud_proj);
+      cHull.reconstruct (*mesh);
+      meshes->push_back(mesh);
       }
-      
+
       extract_neg.setInputCloud(outliers);
       extract_neg.setIndices(inliers);
       extract_neg.filter(*outliers);
 
+      seg_plane.setInputCloud(outliers);
+      seg_plane.segment (*inliers_plane, *coefficients_plane);
+
       extract_neg_normal.setInputCloud(normals);
       extract_neg_normal.setIndices(inliers);
       extract_neg_normal.filter(*normals);
-      
+
       inlier_size = inliers->indices.size();
     }while(inlier_size > threshold);
-    
+      
     do{
       seg_sphere.setInputCloud(outliers);
       seg_sphere.setInputNormals(normals);
@@ -374,8 +377,8 @@ int main (int argc, char** argv)
       
       if(inlier_size > 0){
 	
-      }
-      
+    }
+
       extract_neg.setInputCloud(outliers);
       extract_neg.setIndices(inliers);
       extract_neg.filter(*outliers);
@@ -387,9 +390,27 @@ int main (int argc, char** argv)
       inlier_size = inliers->indices.size();
     }while(inlier_size > 0);
 
+    
+    seg_cylinder.setInputCloud(outliers);
+    seg_cylinder.setInputNormals(normals);
+    pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
+
+    seg_cylinder.segment (*inliers_cylinder, *coefficients_cylinder);
+   
+    extract_neg.setInputCloud(outliers);
+    extract_neg.setIndices(inliers_cylinder);
+    extract_neg.filter(*outliers);
+
+    extract_neg_normal.setInputCloud(normals);
+    extract_neg_normal.setIndices(inliers_cylinder);
+    extract_neg_normal.filter(*normals);
+
+
     pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
     vis_cloud = colored_cloud;
     vis_meshes = meshes;
+
   }
   thrd1.join();
   device->stopVideo();
