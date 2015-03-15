@@ -245,9 +245,8 @@ int main (int argc, char** argv)
   seg_cylinder.setMethodType (pcl::SAC_RANSAC);
   seg_cylinder.setNormalDistanceWeight (0.1);
   seg_cylinder.setMaxIterations (100);
-  seg_cylinder.setDistanceThreshold (0.05);
-  seg_cylinder.setRadiusLimits (0, 0.1);
-
+  seg_cylinder.setDistanceThreshold (100000);
+  seg_cylinder.setRadiusLimits (0, 100000);
  
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_sphere;
   seg_sphere.setModelType (pcl::SACMODEL_SPHERE);
@@ -322,14 +321,7 @@ int main (int argc, char** argv)
     reg.setInputCloud (cloud_filtered);
     reg.setInputNormals (normals);
 
-    seg_cylinder.setInputCloud(cloud_filtered);
-    seg_cylinder.setInputNormals (normals);
-
     proj.setInputCloud (cloud_filtered);
-
-
-
-
 
     boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
       meshes(new std::vector<pcl::PolygonMesh::Ptr>());
@@ -365,7 +357,7 @@ int main (int argc, char** argv)
 
       inlier_size = inliers->indices.size();
     }while(inlier_size > threshold);
-      
+     
     do{
       seg_sphere.setInputCloud(outliers);
       seg_sphere.setInputNormals(normals);
@@ -394,7 +386,10 @@ int main (int argc, char** argv)
     pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
 
     seg_cylinder.segment (*inliers_cylinder, *coefficients_cylinder);
-   
+    
+    int i_size = inliers_cylinder->indices.size();
+    cout << i_size << endl;  
+
     extract_neg.setInputCloud(outliers);
     extract_neg.setIndices(inliers_cylinder);
     extract_neg.filter(*outliers);
@@ -402,7 +397,6 @@ int main (int argc, char** argv)
     extract_neg_normal.setInputCloud(normals);
     extract_neg_normal.setIndices(inliers_cylinder);
     extract_neg_normal.filter(*normals);
-
 
     pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
     vis_cloud = colored_cloud;
