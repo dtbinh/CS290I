@@ -39,34 +39,6 @@ Matrix3X3::Matrix3X3 (GLdouble j, GLdouble k, GLdouble l, GLdouble m, GLdouble n
 Matrix3X3 mL (cos(.01), 0.0, sin(.01), 0.0, 1.0, 0.0,0.0-sin(.01),0.0,cos(.01));
 Matrix3X3 mL90 (cos(1.59155), 0.0, sin(1.59155), 0.0, 1.0, 0.0,0.0-sin(1.59155),0.0,cos(1.59155));
 Matrix3X3 mR (cos(.01), 0.0,0.0 -sin(.01), 0.0, 1.0, 0.0,sin(.01),0.0,cos(.01));
-
-//matrix class
-class Matrix4X4 {
-  public:
-    GLdouble a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p;
-    Matrix4X4(GLdouble a=0.0, GLdouble b=0.0, GLdouble c=0.0, GLdouble d=0.0, GLdouble e=0.0, GLdouble f=0.0, GLdouble g=0.0, GLdouble h=0.0, GLdouble i=0.0, GLdouble j=0.0, GLdouble k=0.0, GLdouble l=0.0, GLdouble m=0.0, GLdouble n=0.0, GLdouble o=0.0, GLdouble p=0.0);
-    Matrix4X4& operator=(const Matrix4X4& z){ a = z.a; b = z.b; c = z.c; d = z.d; e = z.e; f = z.f; g = z.g; h = z.h; i = z.i; j = z.j; k = z.k; l = z.l; m =z.m; n= z.n; o =z.o; p =z.p; return *this; }
-    GLdouble array(){ GLdouble result[]={a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p}; return *result; }
-};
-//setting matrix
-Matrix4X4::Matrix4X4 (GLdouble aa, GLdouble bb, GLdouble cc, GLdouble dd, GLdouble ee, GLdouble ff, GLdouble gg, GLdouble hh, GLdouble ii, GLdouble jj, GLdouble kk, GLdouble ll, GLdouble mm, GLdouble nn, GLdouble oo, GLdouble pp) {
-  a = aa;
-  b = bb;
-  c = cc;
-  d = dd; 
-  e = ee;
-  f = ff;
-  g = gg;
-  h = hh;
-  i = ii;
-  j = jj;
-  k = kk;
-  l = ll;
-  m = mm;
-  n = nn;
-  o = oo;
-  p = pp;
-}
 //vector class
 class Vec3f {
   public:
@@ -124,20 +96,19 @@ class PRIMITIVE
     virtual ~PRIMITIVE(){}
     Vec3f COLOR;
     virtual void draw_p() = 0;
+  //  void draw_p();
 };
 
 class PLANE:public PRIMITIVE{
   private:
     vector<Vec3f> POINTS;
-    Vec3f CENTROID;
     Vec3f COLOR;
     int WALL;
     int CEILING;
     int FLOOR;
   public:
-    PLANE(vector<Vec3f> points, Vec3f centroid, Vec3f color, int wall, int ceiling, int floor){
+    PLANE(vector<Vec3f> points, Vec3f color, int wall, int ceiling, int floor){
       POINTS = points;
-      CENTROID = centroid;
       COLOR = color;
       WALL = wall;
       CEILING = ceiling;
@@ -145,10 +116,8 @@ class PLANE:public PRIMITIVE{
     }
     void draw_p(){
       glPushMatrix();
-        glClear(GL_COLOR_BUFFER_BIT);
         glBegin(GL_TRIANGLE_FAN);
-          glColor4f(0,1,0,1);
-          glVertex3f(CENTROID.x, CENTROID.y, CENTROID.z);
+          glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
  	  for (int i = 0; i < POINTS.size(); i++){
             glVertex3f(POINTS[i].x,POINTS[i].y,POINTS[i].z);
           }
@@ -182,25 +151,24 @@ class SPHERE:public PRIMITIVE{
 
 class CYLINDER:public PRIMITIVE{
   private:
-    Vec3f CENTER;
     float RADIUS;
     float HEIGHT;
-    Matrix4X4 TRANSFORMATION;
+    GLdouble TRANSFORMATION[16];
     GLUquadric* qobj;
   public:
-    CYLINDER(Vec3f center, Vec3f color, float radius, float height, Matrix4X4 transformation){
-      CENTER = center;
+    CYLINDER(Vec3f color, float radius, float height, GLdouble transformation[16]){
       COLOR = color;
       RADIUS = radius;
       HEIGHT = height;
-      TRANSFORMATION = transformation;
+      for (int i = 0; i < 16; i++){
+        TRANSFORMATION[i] = transformation[i]; }
       qobj = gluNewQuadric();
       gluQuadricNormals(qobj, GLU_SMOOTH);
     }
     void draw_p(){
       glPushMatrix();
-        const GLdouble p = TRANSFORMATION.array();
-        glMultMatrixd(&p);
+        glMultMatrixd(TRANSFORMATION);
+        glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
         gluCylinder(qobj,RADIUS,HEIGHT,20.0, 20.0,20.0);
       glPopMatrix();
       return;
@@ -209,6 +177,7 @@ class CYLINDER:public PRIMITIVE{
 };
 
 
+vector<PRIMITIVE*> items;
 //////////////////////////////////////////////////////////////////////////////////
 // Draws to the OpenGL window
 //////////////////////////////////////////////////////////////////////////////////
@@ -221,12 +190,9 @@ void display()
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
 
-
-  Vec3f center (-1, 0, 0);
-  Vec3f color (1.0, 0, 0);
-  SPHERE temp(center, .1, color);
-  temp.draw_p();
-  
+  for (int i = 0; i < items.size(); i++){
+    items[i]->draw_p();
+  }
   glutSwapBuffers();
 }
 
@@ -396,15 +362,37 @@ int main(int argc, char** argv)
   centerX = 0;
   centerY = 0;
   centerZ = 0;
+
+  GLdouble m[16]= {1,0,0,0,
+                   0,1,0,0,
+                   0,0,1,0,
+                   1,0,0,1};
   
+  int capacity = 10;
+  vector<Vec3f> points;
+  points.reserve(capacity);
+  for (int i = 0; i < capacity; i++){
+    float bob = i*6.28/capacity;
+    points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
+  }
+
+  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
+  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
+
+
+  items.push_back (&temp);  
+  items.push_back (&temp2);  
+  items.push_back (&temp3);  
+ 
 
   glutInit(&argc, argv);
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+  glEnable(GL_DEPTH_TEST);
   glutInitWindowSize(600,600);
   glutInitWindowPosition(100, 100);
   glutCreateWindow("Final OpenGL");
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 
-  glEnable(GL_DEPTH_TEST);
 
   glutDisplayFunc(display);
   glutMotionFunc(mouseMotion);
