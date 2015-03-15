@@ -360,7 +360,20 @@ int main (int argc, char** argv)
 
     seg_cylinder.setInputCloud(outliers);
     seg_cylinder.setInputNormals(normals);
+    pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
 
+    seg_cylinder.segment (*inliers_cylinder, *coefficients_cylinder);
+   
+    extract_neg.setInputCloud(outliers);
+    extract_neg.setIndices(inliers_cylinder);
+    extract_neg.filter(*outliers);
+
+    extract_neg_normal.setInputCloud(normals);
+    extract_neg_normal.setIndices(inliers_cylinder);
+    extract_neg_normal.filter(*normals);
+
+    
 
     pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = outliers;//cloud;//reg.getColoredCloud ();
     vis_cloud = colored_cloud;
