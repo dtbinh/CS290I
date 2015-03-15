@@ -323,7 +323,7 @@ int main (int argc, char** argv)
       normal_estimator.compute (*normals);
       reg.setInputCloud (cloud_filtered);
       reg.setInputNormals (normals);
-      reg.extract (clusters);
+//      reg.extract (clusters);
 
 
       seg_cylinder.setInputCloud(cloud_filtered);
@@ -340,18 +340,18 @@ int main (int argc, char** argv)
       boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
          meshes(new std::vector<pcl::PolygonMesh::Ptr>());
 
-      for(std::vector<pcl::PointIndices>::iterator
-	    cluster = clusters.begin(); 
-	  cluster != clusters.end();
-	  cluster++){
+//      for(std::vector<pcl::PointIndices>::iterator
+//	    cluster = clusters.begin(); 
+//	  cluster != clusters.end();
+//	  cluster++){
 
 	int fsize = 65536;
 
 	
-	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
+//	pcl::PointIndices::Ptr clust(new pcl::PointIndices(*cluster));
 
 	//seg_cylinder.setIndices(clust);
-	seg_plane.setIndices(clust);
+//	seg_plane.setIndices(clust);
 
 	seg_plane.segment (*inliers_plane, *coefficients_plane);
 	fsize = inliers_plane->indices.size();
@@ -360,22 +360,14 @@ int main (int argc, char** argv)
 	int j = 0;
 	while(fsize > threshold){	  
 	  pcl::PolygonMesh::Ptr mesh(new pcl::PolygonMesh);
-	proj.setIndices(inliers_plane);
-        proj.setModelCoefficients (coefficients_plane);
-        proj.filter (*cloud_proj);
-        cHull.setInputCloud(cloud_proj);
-        cHull.reconstruct (*mesh);
-        meshes->push_back(mesh);
+  	  proj.setIndices(inliers_plane);
+          proj.setModelCoefficients (coefficients_plane);
+          proj.filter (*cloud_proj);
+          cHull.setInputCloud(cloud_proj);
+          cHull.reconstruct (*mesh);
+          meshes->push_back(mesh);
 
 
-	    /* 
-              << endl  
-	     << "Cylinder: "
-	     << float(inliers_cylinder->indices.size())/fsize << endl
-	     << "Plane " 
-	     << float(inliers_plane->indices.size())/fsize
-	       << endl << endl;
-	    */
 	  extract_neg.setIndices(inliers_plane);
 	  extract_neg.filter(*outliers);
 
@@ -389,7 +381,7 @@ int main (int argc, char** argv)
 
 	}
         i++;
-      }
+  //    }
       pcl::PointCloud <pcl::PointXYZRGB>::Ptr colored_cloud = reg.getColoredCloud ();
       vis_cloud = colored_cloud;
       vis_meshes = meshes;
