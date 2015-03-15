@@ -374,7 +374,7 @@ int main(int argc, char** argv)
   points.reserve(capacity);
   for (int i = 0; i < capacity; i++){
     float bob = i*6.28/capacity;
-    Vec3f(sin(bob),cos(bob),-1); 
+    points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
   }
 
   SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
@@ -391,8 +391,8 @@ int main(int argc, char** argv)
   glutInitWindowSize(600,600);
   glutInitWindowPosition(100, 100);
   glutCreateWindow("Final OpenGL");
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
 
   glutDisplayFunc(display);
