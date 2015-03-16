@@ -67,8 +67,10 @@
 
 
 //Global for main loop so openGL
-bool GO = false;
-
+bool GO = true;
+bool data_rdy = false;
+boost::mutex mtx;
+boost::condition_variable condition;
 
 //global vars for camera (GL)
 GLdouble eyeX = 0.0;
@@ -154,20 +156,20 @@ void visualizerThread()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
   std::vector<std::string> meshnames;
-
+	boost::mutex::scoped_lock lock(mtx);
   while (!viewer->wasStopped ())
   {  
-
+		while(!data_rdy)
+    	condition.wait(lock);
     viewer->spinOnce ();
-    
     if(vis_cloud){
+			printf("vis_cloud\n");
       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
       vis_cloud.swap(cloud);
-
       if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
-	viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
-	viewer->setPointCloudRenderingProperties 
-	  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+				viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
+				viewer->setPointCloudRenderingProperties 
+	  			(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
       }
     }
     if(vis_meshes){
@@ -188,6 +190,7 @@ void visualizerThread()
        viewer->addPolygonMesh(**it, ss.str());
       }
     }
+		data_rdy = false;
   }
 }
 
@@ -256,9 +259,8 @@ void glutThread() {
   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
   glutInitWindowSize(600,600);
-  glutInitWindowPosition(100, 100);
+  glutInitWindowPosition(100, 500);
   glutCreateWindow("Final OpenGL");
-
 
   glutDisplayFunc(display);
 //  glutMotionFunc(mouseMotion);
@@ -269,7 +271,7 @@ void glutThread() {
   glutReshapeFunc(reshape);
   glutMainLoop();
 }
-
+	
 int main (int argc, char** argv)
 {
 	glutInit(&argc, argv);
@@ -340,6 +342,7 @@ int main (int argc, char** argv)
     boost::bind(&glutThread));
   boost::thread thrd2(
     boost::bind(&visualizerThread));
+	
   //--------------------
   // -----Main loop-----
   //--------------------
@@ -365,7 +368,7 @@ int main (int argc, char** argv)
 
   printf("Start the main loop.\n");
   while (GO){
-      device->updateState();
+			device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
 		
@@ -410,8 +413,6 @@ int main (int argc, char** argv)
 			seg_plane.setInputNormals(normals);
       proj.setInputCloud (cloud_filtered);
 
-
-
       i = 0;
 
       boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
@@ -448,11 +449,14 @@ int main (int argc, char** argv)
       vis_cloud = colored_cloud;
       vis_meshes = meshes;
       //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+			data_rdy = true;
+			condition.notify_one();
   }
   thrd1.join();
 	thrd2.join();
   device->stopVideo();
   device->stopDepth();
+	
   //devicetwo->stopVideo();
   //devicetwo->stopDepth();
   return 0;
