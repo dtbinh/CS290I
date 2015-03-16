@@ -38,7 +38,6 @@
 #include <vector>
 #include <ctime>
 #include <boost/thread/thread.hpp>
-#include <boost/thread/mutex.hpp>
 #include "pcl/common/common_headers.h"
 #include "pcl/common/eigen.h"
 #include "pcl/common/transforms.h"
@@ -160,19 +159,17 @@ void visualizerThread()
 	boost::mutex::scoped_lock lock(mtx);
   while (!viewer->wasStopped ())
   {  
-    viewer->spinOnce ();
-		printf("waiting on lock\n");
 		while(!data_rdy)
     	condition.wait(lock);
+    viewer->spinOnce ();
     if(vis_cloud){
 			printf("vis_cloud\n");
       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
       vis_cloud.swap(cloud);
-
       if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
-	viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
-	viewer->setPointCloudRenderingProperties 
-	  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
+				viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "Kinect Cloud");
+				viewer->setPointCloudRenderingProperties 
+	  			(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "Kinect Cloud");
       }
     }
     if(vis_meshes){
@@ -262,7 +259,7 @@ void glutThread() {
   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
   glutInitWindowSize(600,600);
-  glutInitWindowPosition(100, 100);
+  glutInitWindowPosition(100, 500);
   glutCreateWindow("Final OpenGL");
 
   glutDisplayFunc(display);
@@ -370,12 +367,7 @@ int main (int argc, char** argv)
   proj.setModelType (pcl::SACMODEL_PLANE);
 
   printf("Start the main loop.\n");
-	thrd2.interrupt();
-	printf("Thread2 interrupted\n");
   while (GO){
-			printf("top of main loop\n");
-			thrd2.interrupt();
-      
 			device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
