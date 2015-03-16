@@ -38,6 +38,7 @@
 #include <vector>
 #include <ctime>
 #include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
 #include "pcl/common/common_headers.h"
 #include "pcl/common/eigen.h"
 #include "pcl/common/transforms.h"
@@ -67,8 +68,10 @@
 
 
 //Global for main loop so openGL
-bool GO = false;
-
+bool GO = true;
+bool data_rdy = false;
+boost::mutex mtx;
+boost::condition_variable condition;
 
 //global vars for camera (GL)
 GLdouble eyeX = 0.0;
@@ -154,13 +157,15 @@ void visualizerThread()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
   std::vector<std::string> meshnames;
-
+	boost::mutex::scoped_lock lock(mtx);
   while (!viewer->wasStopped ())
   {  
-
     viewer->spinOnce ();
-    
+		printf("waiting on lock\n");
+		while(!data_rdy)
+    	condition.wait(lock);
     if(vis_cloud){
+			printf("vis_cloud\n");
       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
       vis_cloud.swap(cloud);
 
@@ -188,6 +193,7 @@ void visualizerThread()
        viewer->addPolygonMesh(**it, ss.str());
       }
     }
+		data_rdy = false;
   }
 }
 
@@ -259,7 +265,6 @@ void glutThread() {
   glutInitWindowPosition(100, 100);
   glutCreateWindow("Final OpenGL");
 
-
   glutDisplayFunc(display);
 //  glutMotionFunc(mouseMotion);
 //  glutMouseFunc(mouseButton);
@@ -269,7 +274,7 @@ void glutThread() {
   glutReshapeFunc(reshape);
   glutMainLoop();
 }
-
+	
 int main (int argc, char** argv)
 {
 	glutInit(&argc, argv);
@@ -340,6 +345,7 @@ int main (int argc, char** argv)
     boost::bind(&glutThread));
   boost::thread thrd2(
     boost::bind(&visualizerThread));
+	
   //--------------------
   // -----Main loop-----
   //--------------------
@@ -364,8 +370,13 @@ int main (int argc, char** argv)
   proj.setModelType (pcl::SACMODEL_PLANE);
 
   printf("Start the main loop.\n");
+	thrd2.interrupt();
+	printf("Thread2 interrupted\n");
   while (GO){
-      device->updateState();
+			printf("top of main loop\n");
+			thrd2.interrupt();
+      
+			device->updateState();
       device->getDepth(mdepth);
       device->getRGB(mrgb);
 		
@@ -410,8 +421,6 @@ int main (int argc, char** argv)
 			seg_plane.setInputNormals(normals);
       proj.setInputCloud (cloud_filtered);
 
-
-
       i = 0;
 
       boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > 
@@ -448,11 +457,14 @@ int main (int argc, char** argv)
       vis_cloud = colored_cloud;
       vis_meshes = meshes;
       //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+			data_rdy = true;
+			condition.notify_one();
   }
   thrd1.join();
 	thrd2.join();
   device->stopVideo();
   device->stopDepth();
+	
   //devicetwo->stopVideo();
   //devicetwo->stopDepth();
   return 0;

@@ -7,233 +7,319 @@
 #include <GL/glut.h>
 #include <cstdio>
 #include <cstdlib>
-#include <cmath>
-#include <ctime>
-#include "System.h"
+#include <vector>
+#include <algorithm>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/norm.hpp>
 
 #define WIN_W 640
 #define WIN_H 480
-#define LEN 0.05
-#define NUM_PARTICLES 100
-#define X NUM_PARTICLES / 2
-#define Y NUM_PARTICLES / 2
+#define MaxParticles 1000
 
-using namespace std;
+struct Particle{
+	glm::vec3 pos, speed;
+	unsigned char r,g,b,a; // Color
+	float size, angle, weight;
+	float life; // Remaining life of the particle. if <0 : dead and unused.
+	float cameradistance; // *Squared* distance to the camera. if dead : -1.0f
 
-float Perlin		[NUM_PARTICLES];
-float pos_table	[NUM_PARTICLES][2];
-float colors		[NUM_PARTICLES][3]; 
-float Gradient	[X][Y][2];
-float zoom;
-System particleSystem;
-GLfloat texture[10];
-GLuint LoadTextureRAW(const char* filename, int width, int height);
-void FreeTexture(GLuint texturez);
+	bool operator<(const Particle& that) const {
+	// Sort in reverse order : far particles drawn first.
+		return this->cameradistance > that.cameradistance;
+	}
+};
 
-void DrawParticles (void)
-{
-   int i;
-   for (i = 1; i < particleSystem.getNumOfParticles(); i++)
-   {
-      glPushMatrix();
-      // set color and fade value (alpha) of current particle
-      glColor4f(particleSystem.getR(i), particleSystem.getG(i), particleSystem.getB(i), particleSystem.getAlpha(i));
-      // move the current particle to its new position
-      glTranslatef(particleSystem.getXPos(i), particleSystem.getYPos(i), particleSystem.getZPos(i) + zoom);
-      // rotate the particle (this is proof of concept for when proper smoke texture is added)
-      glRotatef (particleSystem.getDirection(i) - 90, 0, 0, 1);
-      // scale the current particle (only used for smoke)
-     // glScalef(particleSystem.getScale(i), particleSystem.getScale(i), particleSystem.getScale(i));
+Particle ParticlesContainer[MaxParticles];
+int LastUsedParticle = 0;
 
-      glDisable (GL_DEPTH_TEST);
-      glEnable (GL_BLEND);
-
-      glBlendFunc (GL_DST_COLOR, GL_ZERO);
-      glBindTexture (GL_TEXTURE_2D, texture[0]);
-
-			
-      glBegin (GL_QUADS);
-      glTexCoord2d (0, 0);
-      glVertex3f (-1, -1, 0);
-      glTexCoord2d (1, 0);
-      glVertex3f (1, -1, 0);
-      glTexCoord2d (1, 1);
-      glVertex3f (1, 1, 0);
-      glTexCoord2d (0, 1);
-      glVertex3f (-1, 1, 0);
-      glEnd();
-
-      glBlendFunc (GL_ONE, GL_ONE);
-      glBindTexture (GL_TEXTURE_2D, texture[1]);
-
-      glBegin (GL_QUADS);
-      glTexCoord2d (0, 0);
-      glVertex3f (-1, -1, 0);
-      glTexCoord2d (1, 0);
-      glVertex3f (1, -1, 0);
-      glTexCoord2d (1, 1);
-      glVertex3f (1, 1, 0);
-      glTexCoord2d (0, 1);
-      glVertex3f (-1, 1, 0);
-      glEnd();
-		
-      glEnable(GL_DEPTH_TEST);
-
-     glPopMatrix();
-		 //printf("particle %i pos: %f, %f, %f\n", i, particleSystem.getXPos(i), particleSystem.getYPos(i), particleSystem.getZPos(i));
-   }
-}
-
-
-void initGrad() {
-	srand(time(NULL));
-	//COMPUTE GRADIENT
-	int x = 0;
-	int y = 0;
-	while(x + y < X + Y) {
-		//generate values from -1 to 1
-		float x1 = (rand() % 201) * 0.01 - 1;
-		float y1 = (rand() % 201) * 0.01 - 1;
-		float r_sqr = pow(x1, 2) + pow(y1, 2);
-		if(r_sqr > 0 && r_sqr <= 1)
-		{
-			Gradient[x][y][0] = x1 / (x1 + y1);
-			Gradient[x][y][1] = y1 / (x1 + y1);
-			y++;
-		
-			if(y == Y) {
-				y = 0;
-				x++;
-			}
+int FindUnusedParticle(){
+	for(int i=LastUsedParticle; i<MaxParticles; i++){
+		if (ParticlesContainer[i].life < 0){
+			LastUsedParticle = i;
+			return i;
 		}
 	}
+
+	for(int i=0; i<LastUsedParticle; i++){
+		if (ParticlesContainer[i].life < 0){
+		  LastUsedParticle = i;
+		  return i;
+	  }
+  }
+	return 0; // All particles are taken, override the first one
 }
 
-float lerp(float a0, float a1, float w) {
-	return (1.0 - w) * a0 + w * a1;
-}
-
-float dotGridGrad(int ix, int iy, float x, float y) {
-	float dx = x - (double) ix;
-	float dy = y - (double) iy;
-	return (dx*Gradient[ix][iy][0] + dy*Gradient[ix][iy][1]);
-}
-
-void perlin(float x, float y, int z) {
-	//grid cell coords:
-	int x0 = (x > 0.0 ? (int) x : (int) x - 1);
-	int x1 = x0 + 1;
-	int y0 = (y > 0.0 ? (int) y : (int) y - 1);
-	int y1 = y0 + 1;
-
-	//determine interpolation weights
-	float wx = x - (double) x0;
-	float wy = y - (double) y0;
-
-	//interpolate between grid points and gradients
-	float n0, n1, ix0, ix1, value;
-	n0 = dotGridGrad(x0, y0, x, y);
-	n1 = dotGridGrad(x1, y0, x, y);
-	ix0 = lerp(n0, n1, wx);
-
-	n0 = dotGridGrad(x0, y1, x, y);
-	n1 = dotGridGrad(x1, y1, x, y);
-	ix1 = lerp(n0, n1, wx);
-	value = lerp(ix0, ix1, wy);
-	Perlin[z] = value;
+void SortParticles(){
+	std::sort(&ParticlesContainer[0], &ParticlesContainer[MaxParticles]);
 }
 
 void idle(void) {
-	//update all perlin values
-	for(int i = 0; i < NUM_PARTICLES; i++) {
-		perlin(pos_table[i][0]*10, pos_table[i][1]*10, i);
-	}
-	
-	//update all particle colors using result from perlin
-	for(int i = 0; i < NUM_PARTICLES; i++) {
-		if(Perlin[i] == 0) {
-			colors[i][0] = 0.0f;
-			colors[i][1] = 1.0f;
-			colors[i][2] = 0.0f;
-		}
-		else if(Perlin[i] < 0) {
-			colors[i][0] = 1.0f;
-			colors[i][1] = 0.0f;
-			colors[i][2] = 0.0f;
-		}
-		else {
-			colors[i][0] = 0.0f;
-			colors[i][1] = 0.0f;
-			colors[i][2] = 1.0f;
-		}
-	}
-	
-	//update particles positions
-	//particleSystem.updateParticles();
-
 }
 
 void init(void) {
-	GLfloat mat_specular  [] = { 1.0, 1.0, 1.0, 1.0 };
-  GLfloat mat_shininess [] = { 50.0 };
-	GLfloat light_ambient [] = { 1.0, 1.0, 1.0, 0.0 };
-  GLfloat light_specular[] = { 0.5, 1.0, 1.0, 0.0 };
-  GLfloat light_position[] = { 1.0, 1.0, 1.0, 0.0 };
-  
-	glClearColor(0.0, 0.0, 0.0, 0.0);
-  glShadeModel(GL_SMOOTH);
-
-  glMaterialfv(GL_FRONT, GL_SPECULAR,  mat_specular);
-  glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
-	
-	glLightfv(GL_LIGHT0, GL_AMBIENT,  light_ambient);
-	glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
-  glLightfv(GL_LIGHT0, GL_POSITION, light_position);
-
-	glEnable(GL_LIGHTING);
-	glEnable(GL_LIGHT0);
-	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
-	zoom = -60.0f;
+	GLuint VertexArrayID;
+	glGenVertexArrays(1, &VertexArrayID);
+	glBindVertexArray(VertexArrayID);
 
-	particleSystem.setSystemType(4);
-	particleSystem.createParticles();
+	/*
+	// Create and compile our GLSL program from the shaders
+	GLuint programID = LoadShaders( "Particle.vertexshader", "Particle.fragmentshader" );
 
-	texture[0] = LoadTextureRAW( "particle_mask.raw",256,256); 	//alpha
-	texture[1] = LoadTextureRAW( "particle.raw",256,256);				//texture
+  // Vertex shader
+	GLuint CameraRight_worldspace_ID  = glGetUniformLocation(programID, "CameraRight_worldspace");
+	GLuint CameraUp_worldspace_ID  = glGetUniformLocation(programID, "CameraUp_worldspace");
+	GLuint ViewProjMatrixID = glGetUniformLocation(programID, "VP");
+	
+	// fragment shader
+	GLuint TextureID  = glGetUniformLocation(programID, "myTextureSampler");
+	*/
+	
+	static GLfloat* g_particule_position_size_data = new GLfloat[MaxParticles * 4];
+  static GLubyte* g_particule_color_data         = new GLubyte[MaxParticles * 4];
 
-	initGrad();
+  for(int i=0; i<MaxParticles; i++){
+	   ParticlesContainer[i].life = -1.0f;
+	   ParticlesContainer[i].cameradistance = -1.0f;
+	}
+
+  GLuint Texture = loadDDS("particle.DDS");
+
+	// The VBO containing the 4 vertices of the particles.
+	// // Thanks to instancing, they will be shared by all particles.
+	static const GLfloat g_vertex_buffer_data[] = {
+		-0.5f, -0.5f, 0.0f,
+		0.5f, -0.5f, 0.0f,
+		-0.5f, 0.5f, 0.0f,
+		0.5f, 0.5f, 0.0f,
+	};
+
+	GLuint billboard_vertex_buffer;
+	glGenBuffers(1, &billboard_vertex_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, billboard_vertex_buffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
+	
+	// The VBO containing the positions and sizes of the particles
+	GLuint particles_position_buffer;
+	glGenBuffers(1, &particles_position_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, particles_position_buffer);
+	// Initialize with empty (NULL) buffer : it will be updated later, each frame.
+	glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLfloat), NULL, GL_STREAM_DRAW);
+  
+ 	// The VBO containing the colors of the particles
+ 	GLuint particles_color_buffer;
+	glGenBuffers(1, &particles_color_buffer);
+  glBindBuffer(GL_ARRAY_BUFFER, particles_color_buffer);
+  // Initialize with empty (NULL) buffer : it will be updated later, each frame.
+  glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLubyte), NULL, GL_STREAM_DRAW);
+
+
 }
 
 void display(void) {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_COLOR_MATERIAL);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glTranslatef(0, 0, -10);
-	//draw some fire particles
-	particleSystem.updateParticles();
-	DrawParticles();
-	/*
-		for(int i = 0; i < NUM_PARTICLES; i++) {
-			glColor3f(colors[i][0], colors[i][1], colors[i][2]);
-			glPushMatrix();
-				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-				glBegin(GL_LINES);
-					glVertex3f(pos_table[i][0], pos_table[i][1], 0);
-					glVertex3f(pos_table[i][0] + LEN, pos_table[i][1], 0);
-					glVertex3f(pos_table[i][0], pos_table[i][1], 0);
-					glVertex3f(pos_table[i][0], pos_table[i][1] + LEN, 0);
-					glVertex3f(pos_table[i][0], pos_table[i][1], 0);
-					glVertex3f(pos_table[i][0] - LEN, pos_table[i][1] - LEN, 0);
-					glVertex3f(pos_table[i][0], pos_table[i][1], 0);
-					glVertex3f(pos_table[i][0], pos_table[i][1] - LEN, 0);
-				glEnd();
-			glPopMatrix();
+	
+	//begin while
+	// Clear the screen
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		double currentTime = glfwGetTime();
+		double delta = currentTime - lastTime;
+		lastTime = currentTime;
+
+
+		computeMatricesFromInputs();
+		glm::mat4 ProjectionMatrix = getProjectionMatrix();
+		glm::mat4 ViewMatrix = getViewMatrix();
+
+		// We will need the camera's position in order to sort the particles
+		// w.r.t the camera's distance.
+		// There should be a getCameraPosition() function in common/controls.cpp, 
+		// but this works too.
+		glm::vec3 CameraPosition(glm::inverse(ViewMatrix)[3]);
+
+		glm::mat4 ViewProjectionMatrix = ProjectionMatrix * ViewMatrix;
+
+
+		// Generate 10 new particule each millisecond,
+		// but limit this to 16 ms (60 fps), or if you have 1 long frame (1sec),
+		// newparticles will be huge and the next frame even longer.
+		int newparticles = (int)(delta*10000.0);
+		if (newparticles > (int)(0.016f*10000.0))
+			newparticles = (int)(0.016f*10000.0);
+		
+		for(int i=0; i<newparticles; i++){
+			int particleIndex = FindUnusedParticle();
+			ParticlesContainer[particleIndex].life = 5.0f; // This particle will live 5 seconds.
+			ParticlesContainer[particleIndex].pos = glm::vec3(0,0,-20.0f);
+
+			float spread = 1.5f;
+			glm::vec3 maindir = glm::vec3(0.0f, 10.0f, 0.0f);
+			// Very bad way to generate a random direction; 
+			// See for instance http://stackoverflow.com/questions/5408276/python-uniform-spherical-distribution instead,
+			// combined with some user-controlled parameters (main direction, spread, etc)
+			glm::vec3 randomdir = glm::vec3(
+				(rand()%2000 - 1000.0f)/1000.0f,
+				(rand()%2000 - 1000.0f)/1000.0f,
+				(rand()%2000 - 1000.0f)/1000.0f
+			);
+			
+			ParticlesContainer[particleIndex].speed = maindir + randomdir*spread;
+
+
+			// Very bad way to generate a random color
+			ParticlesContainer[particleIndex].r = rand() % 256;
+			ParticlesContainer[particleIndex].g = rand() % 256;
+			ParticlesContainer[particleIndex].b = rand() % 256;
+			ParticlesContainer[particleIndex].a = (rand() % 256) / 3;
+
+			ParticlesContainer[particleIndex].size = (rand()%1000)/2000.0f + 0.1f;
+			
 		}
-	*/
-	glDisable(GL_COLOR_MATERIAL);
+
+
+
+		// Simulate all particles
+		int ParticlesCount = 0;
+		for(int i=0; i<MaxParticles; i++){
+
+			Particle& p = ParticlesContainer[i]; // shortcut
+
+			if(p.life > 0.0f){
+
+				// Decrease life
+				p.life -= delta;
+				if (p.life > 0.0f){
+
+					// Simulate simple physics : gravity only, no collisions
+					p.speed += glm::vec3(0.0f,-9.81f, 0.0f) * (float)delta * 0.5f;
+					p.pos += p.speed * (float)delta;
+					p.cameradistance = glm::length2( p.pos - CameraPosition );
+					//ParticlesContainer[i].pos += glm::vec3(0.0f,10.0f, 0.0f) * (float)delta;
+
+					// Fill the GPU buffer
+					g_particule_position_size_data[4*ParticlesCount+0] = p.pos.x;
+					g_particule_position_size_data[4*ParticlesCount+1] = p.pos.y;
+					g_particule_position_size_data[4*ParticlesCount+2] = p.pos.z;
+												   
+					g_particule_position_size_data[4*ParticlesCount+3] = p.size;
+												   
+					g_particule_color_data[4*ParticlesCount+0] = p.r;
+					g_particule_color_data[4*ParticlesCount+1] = p.g;
+					g_particule_color_data[4*ParticlesCount+2] = p.b;
+					g_particule_color_data[4*ParticlesCount+3] = p.a;
+
+				}else{
+					// Particles that just died will be put at the end of the buffer in SortParticles();
+					p.cameradistance = -1.0f;
+				}
+
+				ParticlesCount++;
+
+			}
+		}
+
+		SortParticles();
+
+
+		//printf("%d ",ParticlesCount);
+
+
+		// Update the buffers that OpenGL uses for rendering.
+		// There are much more sophisticated means to stream data from the CPU to the GPU, 
+		// but this is outside the scope of this tutorial.
+		// http://www.opengl.org/wiki/Buffer_Object_Streaming
+
+
+		glBindBuffer(GL_ARRAY_BUFFER, particles_position_buffer);
+		glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLfloat), NULL, GL_STREAM_DRAW); // Buffer orphaning, a common way to improve streaming perf. See above link for details.
+		glBufferSubData(GL_ARRAY_BUFFER, 0, ParticlesCount * sizeof(GLfloat) * 4, g_particule_position_size_data);
+
+		glBindBuffer(GL_ARRAY_BUFFER, particles_color_buffer);
+		glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLubyte), NULL, GL_STREAM_DRAW); // Buffer orphaning, a common way to improve streaming perf. See above link for details.
+		glBufferSubData(GL_ARRAY_BUFFER, 0, ParticlesCount * sizeof(GLubyte) * 4, g_particule_color_data);
+
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		// Use our shader
+		glUseProgram(programID);
+
+		// Bind our texture in Texture Unit 0
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, Texture);
+		// Set our "myTextureSampler" sampler to user Texture Unit 0
+		glUniform1i(TextureID, 0);
+
+		// Same as the billboards tutorial
+		glUniform3f(CameraRight_worldspace_ID, ViewMatrix[0][0], ViewMatrix[1][0], ViewMatrix[2][0]);
+		glUniform3f(CameraUp_worldspace_ID   , ViewMatrix[0][1], ViewMatrix[1][1], ViewMatrix[2][1]);
+
+		glUniformMatrix4fv(ViewProjMatrixID, 1, GL_FALSE, &ViewProjectionMatrix[0][0]);
+
+		// 1rst attribute buffer : vertices
+		glEnableVertexAttribArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, billboard_vertex_buffer);
+		glVertexAttribPointer(
+			0,                  // attribute. No particular reason for 0, but must match the layout in the shader.
+			3,                  // size
+			GL_FLOAT,           // type
+			GL_FALSE,           // normalized?
+			0,                  // stride
+			(void*)0            // array buffer offset
+		);
+		
+		// 2nd attribute buffer : positions of particles' centers
+		glEnableVertexAttribArray(1);
+		glBindBuffer(GL_ARRAY_BUFFER, particles_position_buffer);
+		glVertexAttribPointer(
+			1,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+			4,                                // size : x + y + z + size => 4
+			GL_FLOAT,                         // type
+			GL_FALSE,                         // normalized?
+			0,                                // stride
+			(void*)0                          // array buffer offset
+		);
+
+		// 3rd attribute buffer : particles' colors
+		glEnableVertexAttribArray(2);
+		glBindBuffer(GL_ARRAY_BUFFER, particles_color_buffer);
+		glVertexAttribPointer(
+			2,                                // attribute. No particular reason for 1, but must match the layout in the shader.
+			4,                                // size : r + g + b + a => 4
+			GL_UNSIGNED_BYTE,                 // type
+			GL_TRUE,                          // normalized?    *** YES, this means that the unsigned char[4] will be accessible with a vec4 (floats) in the shader ***
+			0,                                // stride
+			(void*)0                          // array buffer offset
+		);
+
+		// These functions are specific to glDrawArrays*Instanced*.
+		// The first parameter is the attribute buffer we're talking about.
+		// The second parameter is the "rate at which generic vertex attributes advance when rendering multiple instances"
+		// http://www.opengl.org/sdk/docs/man/xhtml/glVertexAttribDivisor.xml
+		glVertexAttribDivisor(0, 0); // particles vertices : always reuse the same 4 vertices -> 0
+		glVertexAttribDivisor(1, 1); // positions : one per quad (its center)                 -> 1
+		glVertexAttribDivisor(2, 1); // color : one per quad                                  -> 1
+
+		// Draw the particules !
+		// This draws many times a small triangle_strip (which looks like a quad).
+		// This is equivalent to :
+		// for(i in ParticlesCount) : glDrawArrays(GL_TRIANGLE_STRIP, 0, 4), 
+		// but faster.
+		glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, ParticlesCount);
+
+		glDisableVertexAttribArray(0);
+		glDisableVertexAttribArray(1);
+		glDisableVertexAttribArray(2);
+
+		// Swap buffers
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+//endwhile
+				
 	glFlush();
 	glutSwapBuffers;
 	glutPostRedisplay();
@@ -248,32 +334,19 @@ void reshape(int w, int h) {
 void keydown(unsigned char key, int x, int y) {
 	switch(key) {
 		case 27:
+			delete[] g_particule_position_size_data;
+			glDeleteBuffers(1, &particles_color_buffer);
+			glDeleteBuffers(1, &particles_position_buffer);
+			glDeleteBuffers(1, &billboard_vertex_buffer);
+			glDeleteProgram(programID);
+			glDeleteTextures(1, &Texture);
+			glDeleteVertexArrays(1, &VertexArrayID);
 			exit(0);
-			break;
-		case 'u':
-			particleSystem.updateParticles();
 			break;
 	}
 }
 
 int main(int argc, char** argv) {
-
-	float height = -1;
-	for(int i = 0; i < NUM_PARTICLES; i++) {
-		//pos_table[i][0] = rand() % 2 - (0.1 * (rand() % 11));
-		//pos_table[i][1] = (rand() % 11) * 0.01;
-		if(i % 10 == 0)
-		{
-			height += 0.05;
-		}
-		pos_table[i][0] = (i*0.1 - floor(i*0.1));
-		pos_table[i][1] = height;
-		
-		colors[i][0] = 0.0f;
-		colors[i][1] = 0.0f;
-		colors[i][2] = 0.0f;
-	}
-
 	glutInit(&argc, argv);
 	glutInitDisplayMode (GLUT_SINGLE | GLUT_RGBA | GLUT_DEPTH);
 	glutInitWindowSize (WIN_W, WIN_H); 
@@ -286,33 +359,4 @@ int main(int argc, char** argv) {
 	glutKeyboardFunc(keydown);
 	glutMainLoop();
 	return 0;
-}
-
-//Functions to load RAW files (from [4])
-//From OpenGL tutorials at http://www.swiftless.com
-GLuint LoadTextureRAW( const char * filename, int width, int height )
-{
-	GLuint texture;
-	unsigned char * data;
-	FILE * file;
-	file = fopen( filename, "rb" );
-	if ( file == NULL ) return 0;
-	data = (unsigned char *)malloc( width * height * 3 );
-	fread( data, width * height * 3, 1, file );
-	fclose( file );
-	glGenTextures(1, &texture );
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST );
-	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	gluBuild2DMipmaps(GL_TEXTURE_2D, 3, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
-	free( data );
-	return texture;
-}
-
-void FreeTexture( GLuint texture )
-{
-	glDeleteTextures( 1, &texture );
 }
