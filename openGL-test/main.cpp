@@ -126,6 +126,7 @@ class PLANE:public PRIMITIVE{
         if (NORMAL.y > 0){ TEXTURE = floor; }//floor
         else { TEXTURE = ceiling; } //ceiling
       } else { TEXTURE = wall; }
+      cout << TEXTURE << endl;
       return;
     } 
     void draw_p(){
@@ -235,7 +236,7 @@ GLuint loadTexture(const char* fileName)
 {
   GLuint sheepTexture;
   GLubyte *texture;
-  int textureHeight, textureWidth;
+  int textureHeight, textureWidth =512;
   unsigned char* pixels;
   readPPM(fileName, pixels, textureWidth, textureHeight);
 
@@ -277,9 +278,9 @@ void display()
   glLoadIdentity();
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
-  cout << "drawing" << endl;
+//  cout << "drawing" << endl;
   for (int i = 0; i < items.size(); i++){
-    cout << "drawing 1" << endl;
+//    cout << "drawing 1" << endl;
     items[i]->draw_p();
   }
   glutSwapBuffers();
