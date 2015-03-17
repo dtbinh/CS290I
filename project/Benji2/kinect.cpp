@@ -266,8 +266,8 @@ void idle() {
 double lastTime = 0;
 void display() {
   /**** BEGIN ONCE ****/
-	if(ONCE)
-	{
+//	if(ONCE)
+//	{
 		GLuint VertexArrayID;
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
@@ -322,7 +322,7 @@ void display() {
 		glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLubyte), NULL, GL_STREAM_DRAW);
 		lastTime = glfwGetTime();
 		ONCE = false;
-	}
+//	}
 
 	/****END ONCE****/
   
@@ -337,7 +337,7 @@ void display() {
 		double delta = currentTime - lastTime;
 		lastTime = currentTime;
 
-		computeMatricesFromInputs();
+		//computeMatricesFromInputs();
 		glm::mat4 ProjectionMatrix = getProjectionMatrix();
 		glm::mat4 ViewMatrix = getViewMatrix();
 
