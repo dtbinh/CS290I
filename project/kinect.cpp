@@ -28,6 +28,7 @@
  * 
  */
 
+#include "primitives.hpp"
 #include <iostream>
 #include "freenect_fix.hpp"
 #include <libfreenect/libfreenect_registration.h>
@@ -65,8 +66,26 @@
 #include <pcl/surface/convex_hull.h>
 #include <pcl/filters/extract_indices.h>
 #include <sstream>
+#include <GL/glut.h>
 
 int threshold = 250;
+
+//Global for main loop so openGL
+bool GO = true;
+bool data_rdy = false;
+boost::mutex mtx;
+boost::condition_variable condition;
+
+//global vars for camera (GL)
+GLdouble eyeX = 0.0;
+GLdouble eyeY = 0.0;
+GLdouble eyeZ = 5.0;
+GLdouble centerX = 0.0;
+GLdouble centerY = 0.0;
+GLdouble centerZ = 0.0;
+
+//openGL shape vector
+std::vector<PRIMITIVE*> items;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -147,10 +166,11 @@ void visualizerThread()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
   std::vector<std::string> meshnames;
-
+  boost::mutex::scoped_lock lock(mtx);
   while (!viewer->wasStopped ())
     {  
-
+      while(!data_rdy)
+        condition.wait(lock);
       viewer->spinOnce ();
     
       if(vis_cloud){
@@ -232,11 +252,91 @@ void visualizerThread()
 				
 	  }
       }
+		data_rdy = false;
     }
+}
+
+void reshape(int w, int h) {
+	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluPerspective (60.0, (GLfloat) w/(GLfloat)h, 0.01, 200.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+}
+
+void idle() {
+	glutPostRedisplay();
+}
+
+void display() {
+  glClearColor(0,0,0,0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  //set matrix to default
+  glLoadIdentity();
+  //set what we are looking at
+  gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
+
+  for (int i = 0; i < items.size(); i++){
+    items[i]->draw_p();
+  }
+  glutSwapBuffers();
+}
+
+void keyboard(unsigned char key, int x, int y) {
+	switch(key)
+	{
+		case 27:
+			GO = false;
+			exit(0);
+			break;
+	}
+}
+
+void glutThread() {
+
+  GLdouble m[16]= {1,0,0,0,
+                   0,1,0,0,
+                   0,0,1,0,
+                   1,0,0,1};
+  
+  int capacity = 10;
+  std::vector<Vec3f> points;
+  points.reserve(capacity);
+  for (int i = 0; i < capacity; i++){
+    float bob = i*6.28/capacity;
+    points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
+  }
+
+  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
+  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
+
+
+  items.push_back (&temp);  
+  items.push_back (&temp2);  
+  items.push_back (&temp3);  
+ 
+
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+  glEnable(GL_DEPTH_TEST);
+  glutInitWindowSize(600,600);
+  glutInitWindowPosition(100, 100);
+  glutCreateWindow("Final OpenGL");
+
+  glutDisplayFunc(display);
+//  glutMotionFunc(mouseMotion);
+//  glutMouseFunc(mouseButton);
+//  glutMotionFunc(mouseMotion);
+//  glutKeyboardFunc(keyboard);
+  glutIdleFunc(idle);
+  glutReshapeFunc(reshape);
+  glutMainLoop();
 }
 
 int main (int argc, char** argv)
 {
+	glutInit(&argc, argv);
   //More Kinect Setup
   static std::vector<uint16_t> mdepth(640*480);
   static std::vector<uint8_t> mrgb(640*480*4);
@@ -310,8 +410,10 @@ int main (int argc, char** argv)
   seg_sphere.setRadiusLimits (0, 200); 
   seg_sphere.setOptimizeCoefficients (true);
  
-  boost::thread thrd1(
-		      boost::bind(&visualizerThread));
+  	boost::thread thrd1(
+    boost::bind(&glutThread));
+  boost::thread thrd2(
+    boost::bind(&visualizerThread));
   //--------------------
   // -----Main loop-----
   //--------------------
@@ -345,7 +447,7 @@ int main (int argc, char** argv)
   extract_neg_normal.setNegative(true);
   
   printf("Start the main loop.\n");
-  while (1){
+  while (GO){
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr outliers (new pcl::PointCloud<pcl::PointXYZRGB>);
     device->updateState();
     device->getDepth(mdepth);
@@ -542,8 +644,11 @@ int main (int argc, char** argv)
       vis_spheres = spheres;
     if(cylinders->size())
       vis_cylinders = cylinders;
+    data_rdy = true;
+    condition.notify_one();
   }
   thrd1.join();
+  thrd2.join();
   device->stopVideo();
   device->stopDepth();
   //devicetwo->stopVideo();
