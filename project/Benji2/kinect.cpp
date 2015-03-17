@@ -207,7 +207,6 @@ boost::shared_ptr<std::vector<pcl::PolygonMesh::Ptr> > vis_meshes;
 
 void visualizerThread()
 {
-	printf("\n\n\nDO YOU EVEN VIS???\n\n\n");
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
   viewer->setBackgroundColor (0, 0, 0);
   viewer->addCoordinateSystem (1.0);
@@ -522,7 +521,6 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void glutThread() {
-	printf("\n\n\nDO YOU EVEN GLUT???\n\n\n");
   GLdouble m[16]= {1,0,0,0,
                    0,1,0,0,
                    0,0,1,0,

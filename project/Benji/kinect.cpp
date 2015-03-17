@@ -156,7 +156,7 @@ void visualizerThread()
   viewer->addCoordinateSystem (1.0);
   viewer->initCameraParameters ();
   std::vector<std::string> meshnames;
-	boost::mutex::scoped_lock lock(mtx);
+  boost::mutex::scoped_lock lock(mtx);
   while (!viewer->wasStopped ())
   {  
 		while(!data_rdy)
