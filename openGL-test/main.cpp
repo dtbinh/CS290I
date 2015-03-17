@@ -1,7 +1,7 @@
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#include <GLUT/glut.h>
-//#include <GL/glut.h>
+//#include <OpenGL/gl.h>
+//#include <OpenGL/glu.h>
+//#include <GLUT/glut.h>
+#include <GL/glut.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -452,9 +452,9 @@ int main(int argc, char** argv)
   centerY = 0;
   centerZ = 0;
 
-  floorTex = loadTexture("floor.ppm");
-  ceilingTex = loadTexture("ceiling.ppm");
-  wallTex = loadTexture("wall.ppm");
+  floorTex = loadTexture("../textures/lava.ppm");
+  ceilingTex = loadTexture("../textures/sky2.ppm");
+  wallTex = loadTexture("../textures/stone.ppm");
 
   GLdouble m[16]= {1,0,0,0,
                    0,1,0,0,
