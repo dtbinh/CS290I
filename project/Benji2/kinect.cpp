@@ -27,6 +27,11 @@
  * 
  * 
  */
+#define GLM_FORCE_RADIANS
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+#include <GLFW/glfw3.h> 
+
 #include "primitives.hpp"
 #include <iostream>
 #include "freenect_fix.hpp"
@@ -63,13 +68,13 @@
 #include <pcl/filters/project_inliers.h>
 #include <pcl/surface/convex_hull.h>
 #include <sstream>
-#include <GL/glut.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
-#include <shader.hpp>
-#include <texture.hpp>
-#include <controls.hpp>
+#include "common/shader.hpp"
+#include "common/texture.hpp"
+#include "common/controls.hpp"
 
 
 //Global for main loop so openGL
@@ -258,7 +263,7 @@ void reshape(int w, int h) {
 void idle() {
 	glutPostRedisplay();
 }
-
+double lastTime = 0;
 void display() {
   /**** BEGIN ONCE ****/
 	if(ONCE)
