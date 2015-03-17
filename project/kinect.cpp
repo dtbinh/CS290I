@@ -218,7 +218,7 @@ void visualizerThread()
 	  cylinders(new std::vector<pcl::ModelCoefficients::Ptr>());
 	vis_cylinders.swap(cylinders);
        	
-	int i = 0;
+	static int i = 0;
 	for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
 	      cylinders->begin();
 	    it != cylinders->end();
@@ -226,7 +226,8 @@ void visualizerThread()
 	  {
 	    std::stringstream ss;
 	    ss << "cylinders"<< i++;
-            
+            i = i %10;
+	    viewer->removeShape(ss.str());
 	    viewer->addCylinder(**it, ss.str());
 				
 	  }
@@ -293,10 +294,10 @@ int main (int argc, char** argv)
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg_cylinder;
   seg_cylinder.setModelType (pcl::SACMODEL_CYLINDER);
   seg_cylinder.setMethodType (pcl::SAC_RANSAC);
-  seg_cylinder.setNormalDistanceWeight (0);
+  seg_cylinder.setNormalDistanceWeight (10);
   seg_cylinder.setMaxIterations (1000);
-  seg_cylinder.setDistanceThreshold (1000);
-  seg_cylinder.setRadiusLimits (0, 1000);
+  seg_cylinder.setDistanceThreshold (35);
+  seg_cylinder.setRadiusLimits (0, 300);
   //  seg_cylinder.setOptimizeCoefficients (true);
 
  
@@ -434,7 +435,7 @@ int main (int argc, char** argv)
       inlier_size = inliers->indices.size();
       
 
-      if(inlier_size > 0){
+      if(inlier_size > 70){
 	cout << "cylinders:" << i++ << " " << inlier_size << endl;
 	cylinders->push_back(coefficients_cylinder);
 	extract_neg.setInputCloud(outliers);
@@ -446,7 +447,7 @@ int main (int argc, char** argv)
 	extract_neg_normal.filter(*normals);
       }      
      
-    }while(inlier_size > 0);
+    }while(inlier_size > 70);
     i = 0;
     do{
       pcl::ModelCoefficients::Ptr coefficients_sphere (new pcl::ModelCoefficients);
