@@ -1,11 +1,13 @@
-//#include <OpenGL/gl.h>
-//#include <OpenGL/glu.h>
-#include <GL/glut.h>
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#include <GLUT/glut.h>
+//#include <GL/glut.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <string>
 
 using namespace std;
 //global variables for camera
@@ -15,6 +17,10 @@ GLdouble eyeZ;
 GLdouble centerX;
 GLdouble centerY;
 GLdouble centerZ;
+
+GLuint ceilingTex;
+GLuint floorTex;
+GLuint wallTex;
 
 //matrix class
 class Matrix3X3 {
@@ -89,7 +95,11 @@ Vec3f Vec3f::operator* (const Matrix3X3& m) const
   Vec3f result(m.a*x+m.b*y+m.c*z,m.d*x+m.e*y+m.f*z,m.g*x+m.h*y+m.i*z);
   return result;  
 }
-
+inline Vec3f cross(const Vec3f& u, const Vec3f& v){
+  return Vec3f(u.y*v.z - v.y*u.z,
+              -u.x*v.z + v.x*u.z,
+               u.x*v.y - v.x*u.y);
+}
 class PRIMITIVE
 {
   public:
@@ -102,23 +112,39 @@ class PRIMITIVE
 class PLANE:public PRIMITIVE{
   private:
     vector<Vec3f> POINTS;
+    Vec3f NORMAL;
     Vec3f COLOR;
-    int WALL;
-    int CEILING;
-    int FLOOR;
+    GLuint TEXTURE;
   public:
-    PLANE(vector<Vec3f> points, Vec3f color, int wall, int ceiling, int floor){
+    PLANE(vector<Vec3f> points, Vec3f color, Vec3f normal){
       POINTS = points;
       COLOR = color;
-      WALL = wall;
-      CEILING = ceiling;
-      FLOOR = floor;
+      NORMAL = normal;
     }
+    void setTexture(GLuint wall, GLuint ceiling, GLuint floor){
+      if (NORMAL.x*NORMAL.x <.1 && NORMAL.z*NORMAL.z <.1){
+        if (NORMAL.y > 0){ TEXTURE = floor; }//floor
+        else { TEXTURE = ceiling; } //ceiling
+      } else { TEXTURE = wall; }
+      return;
+    } 
     void draw_p(){
+      if (POINTS.size() < 3) { return; }
+      glEnable(GL_DEPTH_TEST);
+      glEnable(GL_TEXTURE_2D);
+      glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+      glBindTexture(GL_TEXTURE_2D, TEXTURE);
       glPushMatrix();
         glBegin(GL_TRIANGLE_FAN);
           glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
- 	  for (int i = 0; i < POINTS.size(); i++){
+          Vec3f e1 = cross(NORMAL,((POINTS[1]-POINTS[0])/(POINTS[1]-POINTS[0]).mag()));
+                  //cross product of normal and point-origin/mag(point-origin)
+          Vec3f e2 = cross(NORMAL,e1);
+          for (int i = 0; i < POINTS.size(); i++){
+            Vec3f PO = POINTS[0] - POINTS[i];
+            double t1 = e1.x*PO.x + e1.y*PO.y +e1.z*PO.z; //e1 dot p-o
+            double t2 = e2.x*PO.x + e2.y*PO.y +e2.z*PO.z; //e2 dot p-o
+            glTexCoord2d(t1,t2);
             glVertex3f(POINTS[i].x,POINTS[i].y,POINTS[i].z);
           }
         glEnd();
@@ -178,6 +204,68 @@ class CYLINDER:public PRIMITIVE{
 
 
 vector<PRIMITIVE*> items;
+
+void readPPM(const char* filename, unsigned char*& pixels, int& width, int& height)
+{
+  // try to open the file
+  FILE* file;
+  file = fopen(filename, "rb");
+  if (file == NULL)
+  {
+    cout << " Couldn't open file " << filename << "! " << endl;
+    exit(1);
+  }
+
+  // read in the image dimensions
+  fscanf(file, "P6\n%d %d\n255\n", &width, &height);
+  int totalPixels = width * height;
+
+  // allocate three times as many pixels since there are R,G, and B channels
+  pixels = new unsigned char[3 * totalPixels];
+  fread(pixels, 1, 3 * totalPixels, file);
+  fclose(file);
+ 
+  // output some success information
+  cout << " Successfully read in " << filename << " with dimensions: "
+       << width << " " << height << endl;
+}
+
+
+GLuint loadTexture(const char* fileName)
+{
+  GLuint sheepTexture;
+  GLubyte *texture;
+  int textureHeight, textureWidth;
+  unsigned char* pixels;
+  readPPM(fileName, pixels, textureWidth, textureHeight);
+
+  int size = textureWidth*textureHeight*3;
+  texture=(GLubyte*)malloc(sizeof(GLubyte)*size);
+  for (int i=0; i< textureHeight; i++)
+  {
+    for (int j=0; j<3*textureWidth; j++)
+    {
+      texture[i*3*textureWidth+j] = pixels[i*3*textureWidth+j];
+    }
+  }
+  
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+  glGenTextures(1, &sheepTexture);
+  glBindTexture(GL_TEXTURE_2D, sheepTexture);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
+               GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
+               GL_LINEAR);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, textureWidth,
+            textureHeight, 0, GL_RGB, GL_UNSIGNED_BYTE,
+            pixels);
+  return sheepTexture;
+}
+
 //////////////////////////////////////////////////////////////////////////////////
 // Draws to the OpenGL window
 //////////////////////////////////////////////////////////////////////////////////
@@ -189,8 +277,9 @@ void display()
   glLoadIdentity();
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
-
+  cout << "drawing" << endl;
   for (int i = 0; i < items.size(); i++){
+    cout << "drawing 1" << endl;
     items[i]->draw_p();
   }
   glutSwapBuffers();
@@ -363,6 +452,10 @@ int main(int argc, char** argv)
   centerY = 0;
   centerZ = 0;
 
+  floorTex = loadTexture("floor.ppm");
+  ceilingTex = loadTexture("ceiling.ppm");
+  wallTex = loadTexture("wall.ppm");
+
   GLdouble m[16]= {1,0,0,0,
                    0,1,0,0,
                    0,0,1,0,
@@ -376,10 +469,17 @@ int main(int argc, char** argv)
     points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
   }
 
-  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
-  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
-  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
+    
 
+  cout << "here" << endl;
+  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
+  cout << "here 1" << endl;
+  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+  cout << "here 2" << endl;
+  PLANE temp3(points, Vec3f(0,1,0), Vec3f(0, 0, 1));
+  temp3.setTexture(wallTex, ceilingTex, floorTex);
+
+  cout << "here now" << endl;
 
   items.push_back (&temp);  
   items.push_back (&temp2);  
