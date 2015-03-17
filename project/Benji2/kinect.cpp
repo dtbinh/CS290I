@@ -80,8 +80,10 @@
 //Global for main loop so openGL
 bool GO = true;
 bool data_rdy = false;
+bool data_rdy1 = false;
 bool ONCE = true;
 boost::mutex mtx;
+boost::mutex mtx1;
 boost::condition_variable condition;
 
 //global vars for camera (GL)
@@ -93,6 +95,18 @@ GLdouble centerY = 0.0;
 GLdouble centerZ = 0.0;
 
 std::vector<PRIMITIVE*> items;
+
+//particle globals
+static GLfloat* g_particule_position_size_data;
+static GLubyte* g_particule_color_data;
+GLuint particles_position_buffer;
+GLuint particles_color_buffer;
+GLuint programID;
+GLuint Texture;
+GLuint TextureID;
+GLuint CameraRight_worldspace_ID, CameraUp_worldspace_ID;
+GLuint ViewProjMatrixID;
+GLuint billboard_vertex_buffer;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -264,34 +278,38 @@ void idle() {
 }
 double lastTime = 0;
 void display() {
+	boost::mutex::scoped_lock lock(mtx1);
+	while(!data_rdy1)
+		condition.wait(lock);
   /**** BEGIN ONCE ****/
-//	if(ONCE)
-//	{
+
+	if(ONCE)
+	{
 		GLuint VertexArrayID;
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
 
 		// Create and compile our GLSL program from the shaders
-		GLuint programID = LoadShaders( "Particle.vertexshader", "Particle.fragmentshader" );
+		programID = LoadShaders( "shaders/Particle.vertexshader", "shaders/Particle.fragmentshader" );
 
 		// Vertex shader
-		GLuint CameraRight_worldspace_ID  = glGetUniformLocation(programID, "CameraRight_worldspace");
-		GLuint CameraUp_worldspace_ID  = glGetUniformLocation(programID, "CameraUp_worldspace");
-		GLuint ViewProjMatrixID = glGetUniformLocation(programID, "VP");
+		CameraRight_worldspace_ID  = glGetUniformLocation(programID, "CameraRight_worldspace");
+		CameraUp_worldspace_ID  = glGetUniformLocation(programID, "CameraUp_worldspace");
+		ViewProjMatrixID = glGetUniformLocation(programID, "VP");
 
 		// fragment shader
-		GLuint TextureID  = glGetUniformLocation(programID, "myTextureSampler");
+		TextureID  = glGetUniformLocation(programID, "myTextureSampler");
 
 	
-		static GLfloat* g_particule_position_size_data = new GLfloat[MaxParticles * 4];
-		static GLubyte* g_particule_color_data         = new GLubyte[MaxParticles * 4];
+		g_particule_position_size_data = new GLfloat[MaxParticles * 4];
+		g_particule_color_data         = new GLubyte[MaxParticles * 4];
 
 		for(int i=0; i<MaxParticles; i++){
 			ParticlesContainer[i].life = -1.0f;
 			ParticlesContainer[i].cameradistance = -1.0f;
 		}
 
-		GLuint Texture = loadDDS("particle.DDS");
+		Texture = loadDDS("particle.DDS");
 
 		// The VBO containing the 4 vertices of the particles.
 		// Thanks to instancing, they will be shared by all particles.
@@ -301,27 +319,24 @@ void display() {
 			 -0.5f,  0.5f, 0.0f,
 			  0.5f,  0.5f, 0.0f,
 		};
-		GLuint billboard_vertex_buffer;
 		glGenBuffers(1, &billboard_vertex_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, billboard_vertex_buffer);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
 		// The VBO containing the positions and sizes of the particles
-		GLuint particles_position_buffer;
 		glGenBuffers(1, &particles_position_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, particles_position_buffer);
 		// Initialize with empty (NULL) buffer : it will be updated later, each frame.
 		glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLfloat), NULL, GL_STREAM_DRAW);
 	
 		// The VBO containing the colors of the particles
-		GLuint particles_color_buffer;
 		glGenBuffers(1, &particles_color_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, particles_color_buffer);
 		// Initialize with empty (NULL) buffer : it will be updated later, each frame.
 		glBufferData(GL_ARRAY_BUFFER, MaxParticles * 4 * sizeof(GLubyte), NULL, GL_STREAM_DRAW);
 		lastTime = glfwGetTime();
 		ONCE = false;
-//	}
+	}
 
 	/****END ONCE****/
   
@@ -380,6 +395,7 @@ void display() {
 			ParticlesContainer[particleIndex].a = (rand() % 256) / 3;
 			ParticlesContainer[particleIndex].size = (rand()%1000)/2000.0f + 0.1f;			
 		}
+		printf("\n\nparticles init'd\n\n");
 
 		// Simulate all particles
 		int ParticlesCount = 0;
@@ -412,7 +428,9 @@ void display() {
 				ParticlesCount++;
 			}
 		}
+		printf("particles simulated\n");
 		SortParticles();
+		printf("particles sorted\n");
 		// Update the buffers that OpenGL uses for rendering.
 		// There are much more sophisticated means to stream data from the CPU to the GPU, 
 		// but this is outside the scope of this tutorial.
@@ -504,10 +522,11 @@ void display() {
 
 
   for (int i = 0; i < items.size()-1; i++){
-		printf("DRAWING SHAPES!!!\n");
+		printf("\n\n\nDRAWING SHAPES!!!\n\n\n");
     items[i]->draw_p();
   }
   glutSwapBuffers();
+	data_rdy1 = false;
 }
 
 void keyboard(unsigned char key, int x, int y) {
@@ -521,6 +540,7 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void glutThread() {
+	printf("\n\n\nDO YOU EVEN GLUT???\n\n\n");
   GLdouble m[16]= {1,0,0,0,
                    0,1,0,0,
                    0,0,1,0,
@@ -557,6 +577,10 @@ void glutThread() {
 //  glutKeyboardFunc(keyboard);
   glutIdleFunc(idle);
   glutReshapeFunc(reshape);
+
+	glewExperimental = GL_TRUE;
+	glewInit();
+
   glutMainLoop();
 }
 	
@@ -737,6 +761,7 @@ int main (int argc, char** argv)
       vis_meshes = meshes;
       //      cloud_filtered.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
 			data_rdy = true;
+			data_rdy1 = true;
 			condition.notify_all();
   }
   thrd1.join();

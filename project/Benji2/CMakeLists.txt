@@ -29,8 +29,8 @@ SET(MySources
 	${CMAKE_CURRENT_SOURCE_DIR}/common/texture.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/common/controls.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/common/controls.hpp
-	shaders/Particle.fragmentshader
-	shaders/Particle.vertexshader
+	${CMAKE_CURRENT_SOURCE_DIR}/shaders/Particle.fragmentshader
+	${CMAKE_CURRENT_SOURCE_DIR}/shaders/Particle.vertexshader
 )
 
 ADD_EXECUTABLE( main ${MySources} )
