@@ -1,6 +1,7 @@
 // Include GLFW
-#include <glfw3.h>
-extern GLFWwindow* window; // The "extern" keyword here is to access the variable "window" declared in tutorialXXX.cpp. This is a hack to keep the tutorials simple. Please avoid this.
+#define GLM_FORCE_RADIANS
+#include <GLFW/glfw3.h>
+//extern GLFWwindow* window; // The "extern" keyword here is to access the variable "window" declared in tutorialXXX.cpp. This is a hack to keep the tutorials simple. Please avoid this.
 
 // Include GLM
 #include <glm/glm.hpp>
@@ -33,7 +34,7 @@ float speed = 3.0f; // 3 units / second
 float mouseSpeed = 0.005f;
 
 
-
+/*
 void computeMatricesFromInputs(){
 
 	// glfwGetTime is called only once, the first time this function is called
@@ -102,3 +103,4 @@ void computeMatricesFromInputs(){
 	// For the next frame, the "last time" will be "now"
 	lastTime = currentTime;
 }
+*/
