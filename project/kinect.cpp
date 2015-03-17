@@ -158,9 +158,9 @@ void visualizerThread()
 	vis_cloud.swap(cloud);
 	
 	//	if(!viewer->updatePointCloud (cloud, "Kinect Cloud")){
-	viewer->removePointCloud("cloud");
 	viewer->removePointCloud("cloud1");
-	viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud,vis_normals,1,100);
+	//viewer->removePointCloud("cloud1");
+	//	viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud,vis_normals,1,100);
 	viewer->addPointCloud<pcl::PointXYZRGB> (cloud, "cloud1");
 	//viewer->setPointCloudRenderingProperties 
 	//  (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "cloud");
@@ -191,14 +191,14 @@ void visualizerThread()
 	boost::shared_ptr<std::vector<pcl::ModelCoefficients::Ptr> > 
 	  spheres(new std::vector<pcl::ModelCoefficients::Ptr>());
 	vis_spheres.swap(spheres);
-	int i = 0;
+	static int i = 0;
 	for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
 	      spheres->begin();
 	    it != spheres->end();
 	    it++){
 	  std::stringstream ss;
 	  ss << "shape"<< i++;
-            
+          i=i%3;
 	  if(!viewer->updateSphere(pcl::PointXYZ((*it)->values[0],
 						 (*it)->values[1],
 						 (*it)->values[2]),
@@ -338,7 +338,9 @@ int main (int argc, char** argv)
   proj.setModelType (pcl::SACMODEL_PLANE);
 
   pcl::ExtractIndices<pcl::PointXYZRGB> extract_neg;
+  pcl::ExtractIndices<pcl::PointXYZRGB> extract;
   pcl::ExtractIndices<pcl::Normal> extract_neg_normal;
+ 
   extract_neg.setNegative(true);
   extract_neg_normal.setNegative(true);
   
@@ -428,7 +430,10 @@ int main (int argc, char** argv)
     i = 0;
     do{
       cout << "trying to segment cylinder: "<< outliers->size() << endl;
-      pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
+      pcl::ModelCoefficients::Ptr coefficients_cylinder 
+	(new pcl::ModelCoefficients);
+
+      extract.setInputCloud(outliers);
       seg_cylinder.setInputCloud(outliers);
       seg_cylinder.setInputNormals(normals);
       seg_cylinder.segment (*inliers, *coefficients_cylinder);
@@ -436,7 +441,63 @@ int main (int argc, char** argv)
       
 
       if(inlier_size > 70){
-	cout << "cylinders:" << i++ << " " << inlier_size << endl;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud 
+	  (new pcl::PointCloud<pcl::PointXYZRGB> ());
+	extract.setIndices(inliers);
+	extract.filter(*incloud);
+	
+	Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+	/*
+	transform.translation() << 
+	  -coefficients_cylinder->values[0],
+	  -coefficients_cylinder->values[1],
+	  -coefficients_cylinder->values[2];
+	transform.quaternion() <<
+	  1,1,1,0;
+	  */
+	float tx = -coefficients_cylinder->values[0];
+	float ty = -coefficients_cylinder->values[1];
+	float tz = -coefficients_cylinder->values[2];
+	float rx = coefficients_cylinder->values[3];
+	float ry = coefficients_cylinder->values[4];
+	float rz = coefficients_cylinder->values[5];
+	/*
+	float roll  = 0;//std::atan(-rx/ry);
+	float pitch = 0;
+	float yaw   = 0;//sqrt(rx*rx+ry*ry)/rz;
+	*/
+
+	//	transform = transform
+	
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_cloud 
+	  (new pcl::PointCloud<pcl::PointXYZRGB> ());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_cloud2 
+	  (new pcl::PointCloud<pcl::PointXYZRGB> ());
+
+	transform.translation() << tx, ty,tz;
+	//	transform.rotate (rollAngle);
+	//transform.rotate (yawAngle);
+	//transform.rotate (pitchAngle);
+	transform = Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f(rx,ry,rz), Eigen::Vector3f(0,1,0)) * transform;
+
+	pcl::transformPointCloud<pcl::PointXYZRGB> (*incloud, *transformed_cloud, transform);
+	cout << "cylinders:" << i++ << " " << transformed_cloud->size()<< endl;
+	pcl::PointXYZRGB pmin;
+	pcl::PointXYZRGB pmax;
+
+	pcl::getMinMax3D<pcl::PointXYZRGB>(*transformed_cloud, pmin,pmax);
+	
+	Eigen::Affine3f transform2 = Eigen::Affine3f::Identity();
+	transform2.translation() << 0,-pmin.y,0;
+	float height = pmax.y - pmin.y;
+
+	cout << "Cylinder height" << height << endl;
+	/*
+	pcl::transformPointCloud<pcl::PointXYZRGB> (*transformed_cloud,
+						    *transformed_cloud2, 
+						    transform2);
+	vis_cloud = transformed_cloud2;
+	*/
 	cylinders->push_back(coefficients_cylinder);
 	extract_neg.setInputCloud(outliers);
 	extract_neg.setIndices(inliers);
