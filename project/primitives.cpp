@@ -100,7 +100,7 @@ void CYLINDER::draw_p(){
       glPushMatrix();
         glMultMatrixd(TRANSFORMATION);
         glColor4f(COLOR.x,COLOR.y,COLOR.z,0);
-        gluCylinder(qobj,RADIUS,HEIGHT,20.0, 20.0,20.0);
+        gluCylinder(qobj,RADIUS,RADIUS,HEIGHT,20.0,20.0);
       glPopMatrix();
       return;
 }
