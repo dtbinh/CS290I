@@ -76,16 +76,21 @@ bool data_rdy = false;
 boost::mutex mtx;
 boost::condition_variable condition;
 
+//Clipping plane [near,far] 1439.65, 5454.22
+//Focal point [x,y,z] -111.606, 29.9423, 875.226
+//Position [x,y,z] -111.606, 29.9423, -2338.3
+
+
 //global vars for camera (GL)
-GLdouble eyeX = 0.0;
-GLdouble eyeY = 0.0;
-GLdouble eyeZ = 5.0;
-GLdouble centerX = 0.0;
-GLdouble centerY = 0.0;
-GLdouble centerZ = 0.0;
+GLdouble eyeX = 5.0;
+GLdouble eyeY = 0;
+GLdouble eyeZ = 0;
+GLdouble centerX = 0;
+GLdouble centerY = 0;
+GLdouble centerZ = -100;
 
 //openGL shape vector
-std::vector<PRIMITIVE*> items;
+boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > items;
 
 ///Kinect Hardware Connection Class
 /* thanks to Yoda---- from IRC */
@@ -260,7 +265,7 @@ void reshape(int w, int h) {
 	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective (60.0, (GLfloat) w/(GLfloat)h, 0.01, 200.0);
+	gluPerspective (60.0, (GLfloat) w/(GLfloat)h, 0.01, 120000000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 }
@@ -277,8 +282,12 @@ void display() {
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
 
-  for (int i = 0; i < items.size(); i++){
-    items[i]->draw_p();
+  if (items){
+    boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > temp_items = items;
+    for (int i = 0; i < temp_items->size(); i++){
+      (*temp_items)[i]->draw_p();
+      cout << "drawing items " << i << endl;
+    }
   }
   glutSwapBuffers();
 }
@@ -294,30 +303,7 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void glutThread() {
-
-  GLdouble m[16]= {1,0,0,0,
-                   0,1,0,0,
-                   0,0,1,0,
-                   1,0,0,1};
-  
-  int capacity = 10;
-  std::vector<Vec3f> points;
-  points.reserve(capacity);
-  for (int i = 0; i < capacity; i++){
-    float bob = i*6.28/capacity;
-    points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
-  }
-
-  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
-  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
-  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
-
-
-  items.push_back (&temp);  
-  items.push_back (&temp2);  
-  items.push_back (&temp3);  
  
-
   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
   glutInitWindowSize(600,600);
@@ -644,8 +630,60 @@ int main (int argc, char** argv)
       vis_spheres = spheres;
     if(cylinders->size())
       vis_cylinders = cylinders;
+ 
+//HANNAH'S ITEMS
+/*  GLdouble m[16]= {1,0,0,0,
+                   0,1,0,0,
+                   0,0,1,0,
+                   1,0,0,1};
+  
+  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
+
+  items.push_back (&temp2);  
+ */
+    boost::shared_ptr<vector <boost::shared_ptr<PRIMITIVE> > > items_temp(new vector<boost::shared_ptr<PRIMITIVE> >); 
+   
+    for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
+	    it != meshes->end();
+	    it++){
+	
+      std::vector<Vec3f> points;
+      pcl::PointCloud<pcl::PointXYZ> temp_cloud;
+      pcl::fromPCLPointCloud2((*it)->cloud, temp_cloud);
+      points.reserve(temp_cloud.size());
+      for (int j = 0; j < temp_cloud.size(); j++){
+        points.push_back(Vec3f(temp_cloud.at(j).x, temp_cloud.at(j).y, temp_cloud.at(j).z));
+      }
+      eyeX = points[0].x;
+      eyeY = points[0].y;
+      eyeZ = points[0].z;
+      centerX = points[0].x;
+      centerY = points[0].y;
+      centerZ = points[0].z -10000000;
+      boost::shared_ptr<PLANE> temp(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
+      items_temp->push_back(temp);
+    }
+    for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
+          spheres->begin();it != spheres->end(); it++){
+      Vec3f center = Vec3f((*it)->values[0],(*it)->values[1],(*it)->values[2]);
+      boost::shared_ptr<SPHERE> temp( new SPHERE(center,(*it)->values[3], Vec3f(1,0,0)));
+      items_temp->push_back(temp);
+    }
+    for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
+          cylinders->begin();it != cylinders->end(); it++){
+      GLdouble m[16]= {1,0,0,0,
+                       0,1,0,0,
+                       0,0,1,0,
+                       1,0,0,1};
+      boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),.1,.1,m));
+      items_temp->push_back(temp);
+    }
+ 
+    items = items_temp;  
+  
     data_rdy = true;
     condition.notify_one();
+   
   }
   thrd1.join();
   thrd2.join();
