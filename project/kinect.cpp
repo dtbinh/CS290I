@@ -566,7 +566,7 @@ int main (int argc, char** argv)
 	//	transform.rotate (rollAngle);
 	//transform.rotate (yawAngle);
 	//transform.rotate (pitchAngle);
-	transform = Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f(rx,ry,rz), Eigen::Vector3f(0,1,0)) * transform;
+	transform = Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f(rx,ry,rz), Eigen::Vector3f(0,0,1)) * transform;
 
 	pcl::transformPointCloud<pcl::PointXYZRGB> (*incloud, *transformed_cloud, transform);
 	cout << "cylinders:" << i++ << " " << transformed_cloud->size()<< endl;
@@ -576,16 +576,19 @@ int main (int argc, char** argv)
 	pcl::getMinMax3D<pcl::PointXYZRGB>(*transformed_cloud, pmin,pmax);
 	
 	Eigen::Affine3f transform2 = Eigen::Affine3f::Identity();
-	transform2.translation() << 0,-pmin.y,0;
-	float height = pmax.y - pmin.y;
+	transform2.translation() << 0,0,-pmin.z;
+	float height = pmax.z - pmin.z;
 
 	cout << "Cylinder height" << height << endl;
-	/*
-	pcl::transformPointCloud<pcl::PointXYZRGB> (*transformed_cloud,
+	Eigen::Affine3f transform3 = transform2 * transform;
+        Eigen::Affine3f transformInverse = transform3.inverse();
+/*	
+	pcl::transformPointCloud<pcl::PointXYZRGB> (*incloud,
 						    *transformed_cloud2, 
-						    transform2);
+						    transform3);
 	vis_cloud = transformed_cloud2;
-	*/
+*/	
+
 	cylinders->push_back(coefficients_cylinder);
 	extract_neg.setInputCloud(outliers);
 	extract_neg.setIndices(inliers);
@@ -671,11 +674,12 @@ int main (int argc, char** argv)
     }
     for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
           cylinders->begin();it != cylinders->end(); it++){
+      float r = (*it)->values[6];
       GLdouble m[16]= {1,0,0,0,
                        0,1,0,0,
                        0,0,1,0,
-                       1,0,0,1};
-      boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),.1,.1,m));
+                       0,0,0,1};
+      boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),r,.1,m));
       items_temp->push_back(temp);
     }
  
