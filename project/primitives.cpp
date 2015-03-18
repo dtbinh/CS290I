@@ -50,12 +50,29 @@ Vec3f Vec3f::operator* (const Matrix3X3& m) const
   return result;  
 }
 
+inline Vec3f cross(const Vec3f& u, const Vec3f& v){
+  return Vec3f(u.y*v.z - v.y*u.z,
+              -u.x*v.z + v.x*u.z,
+               u.x*v.y - v.x*u.y);
+}
+
+
 PLANE::PLANE(vector<Vec3f> points, Vec3f color, int wall, int ceiling, int floor){
   POINTS = points;
   COLOR = color;
   WALL = wall;
   CEILING = ceiling;
   FLOOR = floor;
+  Vec3f V1 = POINTS[0]-POINTS[1];
+  Vec3f V2 = POINTS[0]-POINTS[2];
+  V1 = V1/V1.mag();
+  V2 = V2/V2.mag();
+  Vec3f NORMAL = cross(V1,V2);
+  if (NORMAL.x*NORMAL.x <.1 && NORMAL.z*NORMAL.z <.1){
+    if (NORMAL.y > 0){ COLOR = Vec3f(.5,.5,0); }//floor
+      else { COLOR = Vec3f(0,.5,.5); } //ceiling
+    } else { COLOR = Vec3f(.5,0,.5); }
+
 }
 
 void PLANE::draw_p(){
