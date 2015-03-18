@@ -286,7 +286,7 @@ void display() {
     boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > temp_items = items;
     for (int i = 0; i < temp_items->size(); i++){
       (*temp_items)[i]->draw_p();
-      cout << "drawing items " << i << endl;
+//      cout << "drawing items " << i << endl;
     }
   }
   glutSwapBuffers();
@@ -603,9 +603,13 @@ int main (int argc, char** argv)
 	transform2.translation() << 0,0,-pmin.z;
 	float height = pmax.z - pmin.z;
 
-	cout << "Cylinder height" << height << endl;
 	Eigen::Affine3f transform3 = transform2 * transform;
-        Eigen::Affine3f transformInverse = transform3.inverse();
+        Eigen::Affine3f tInv = transform3.inverse();
+	cout << tInv(0,0) << " " << tInv(1,0) << " " << tInv(2,0) << " " << tInv(3,0) << endl;
+	cout << tInv(0,1) << " " << tInv(1,1) << " " << tInv(2,1) << " " << tInv(3,1) << endl;
+	cout << tInv(0,2) << " " << tInv(1,2) << " " << tInv(2,2) << " " << tInv(3,2) << endl;
+	cout << tInv(0,3) << " " << tInv(1,3) << " " << tInv(2,3) << " " << tInv(3,3) << endl;
+        cout << "Cylinder height" << height << endl;
 /*	
 	pcl::transformPointCloud<pcl::PointXYZRGB> (*incloud,
 						    *transformed_cloud2, 
@@ -615,11 +619,11 @@ int main (int argc, char** argv)
 
 	cylinders->push_back(coefficients_cylinder);
 
+        GLdouble m[16]= {tInv(0,0),tInv(1,0),tInv(2,0),0,
+                         tInv(0,1),tInv(1,1),tInv(2,1),0,
+                         tInv(0,2),tInv(1,2),tInv(2,2),0,
+                         tInv(0,3),tInv(1,3),tInv(2,3),1};
         float r = coefficients_cylinder->values[6];
-        GLdouble m[16]= {1,0,0,0,
-                         0,1,0,0,
-                         0,0,1,0,
-                         0,0,0,1};
         boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),r,height,m));
         items_temp->push_back(temp);
  
