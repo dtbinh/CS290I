@@ -280,7 +280,7 @@ void display() {
   //set matrix to default
   glLoadIdentity();
   //set what we are looking at
-  gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
+  gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, -1.0, 0.0);
   if (items){
     boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > temp_items = items;
     for (int i = 0; i < temp_items->size(); i++){
