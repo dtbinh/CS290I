@@ -94,7 +94,7 @@ GLdouble centerX = 0.0;
 GLdouble centerY = 0.0;
 GLdouble centerZ = 0.0;
 
-std::vector<PRIMITIVE*> items;
+boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > items;
 
 //particle globals
 static GLfloat* g_particule_position_size_data;
@@ -338,6 +338,13 @@ void display() {
 		ONCE = false;
 	}
 
+
+
+  boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > temp_items;
+	temp_items = items;
+//  for (int j = 0; j < temp_items->size(); j++){
+//   items[j]->draw_p();
+//  }
 	/****END ONCE****/
   
 	
@@ -346,6 +353,7 @@ void display() {
   
 	glLoadIdentity();
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
+  for (int j = 0; j < temp_items->size(); j++){
   //PARTICLES
 		double currentTime = glfwGetTime();
 		double delta = currentTime - lastTime;
@@ -388,14 +396,12 @@ void display() {
 			
 			ParticlesContainer[particleIndex].speed = maindir + randomdir*spread;
 
-			// Very bad way to generate a random color
-			ParticlesContainer[particleIndex].r = rand() % 256;
-			ParticlesContainer[particleIndex].g = rand() % 256;
-			ParticlesContainer[particleIndex].b = rand() % 256;
-			ParticlesContainer[particleIndex].a = (rand() % 256) / 3;
+			ParticlesContainer[particleIndex].r = 255;
+			ParticlesContainer[particleIndex].g = 0;
+			ParticlesContainer[particleIndex].b = 0;
+			ParticlesContainer[particleIndex].a = 255/3; //(rand() % 256) / 3;
 			ParticlesContainer[particleIndex].size = (rand()%1000)/2000.0f + 0.1f;			
 		}
-		printf("\n\nparticles init'd\n\n");
 
 		// Simulate all particles
 		int ParticlesCount = 0;
@@ -428,9 +434,7 @@ void display() {
 				ParticlesCount++;
 			}
 		}
-		printf("particles simulated\n");
 		SortParticles();
-		printf("particles sorted\n");
 		// Update the buffers that OpenGL uses for rendering.
 		// There are much more sophisticated means to stream data from the CPU to the GPU, 
 		// but this is outside the scope of this tutorial.
@@ -517,13 +521,13 @@ void display() {
 		glDisableVertexAttribArray(1);
 		glDisableVertexAttribArray(2);
 
+		glfwPollEvents();
 
   //PARTICLES END
 
 
-  for (int i = 0; i < items.size()-1; i++){
-		printf("\n\n\nDRAWING SHAPES!!!\n\n\n");
-    items[i]->draw_p();
+//  for (int j = 0; j < items->size(); j++){
+		(*temp_items)[j]->draw_p();
   }
   glutSwapBuffers();
 	data_rdy1 = false;
@@ -540,7 +544,6 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void glutThread() {
-	printf("\n\n\nDO YOU EVEN GLUT???\n\n\n");
   GLdouble m[16]= {1,0,0,0,
                    0,1,0,0,
                    0,0,1,0,
@@ -553,16 +556,17 @@ void glutThread() {
     float bob = i*6.28/capacity;
     points.push_back(Vec3f(sin(bob),cos(bob),-1)); 
   }
+  boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > 
+					temp_items(new std::vector<boost::shared_ptr<PRIMITIVE> >);
+	boost::shared_ptr<PRIMITIVE> temp(new SPHERE(Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0)));
+	boost::shared_ptr<PRIMITIVE> temp2(new CYLINDER(Vec3f(0,0,1), .1, .1, m));
+	boost::shared_ptr<PRIMITIVE> temp3(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
 
-  SPHERE temp( Vec3f(-1, 0, 0), .1,  Vec3f(1, 0, 0));
-  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
-  PLANE temp3(points, Vec3f(0,1,0), 0, 0, 0);
 
-
-  items.push_back (&temp);  
-  items.push_back (&temp2);  
-  items.push_back (&temp3);  
- 
+  temp_items->push_back (temp);  
+  temp_items->push_back (temp2);  
+  temp_items->push_back (temp3);  
+  items = temp_items; 
 
   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
   glEnable(GL_DEPTH_TEST);
