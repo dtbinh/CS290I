@@ -265,7 +265,7 @@ void reshape(int w, int h) {
 	glViewport(0, 0, (GLsizei) w, (GLsizei) h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective (60.0, (GLfloat) w/(GLfloat)h, 0.01, 120000000.0);
+	gluPerspective (60.0, (GLfloat) w/(GLfloat)h, 1, 5000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 }
@@ -281,7 +281,6 @@ void display() {
   glLoadIdentity();
   //set what we are looking at
   gluLookAt(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, 0.0, 1.0, 0.0);
-
   if (items){
     boost::shared_ptr<std::vector<boost::shared_ptr<PRIMITIVE> > > temp_items = items;
     for (int i = 0; i < temp_items->size(); i++){
@@ -458,6 +457,19 @@ int main (int argc, char** argv)
     vox.setInputCloud (cloud);
     vox.filter (*cloud_filtered);
       
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*cloud_filtered, centroid);
+    eyeX = centroid[0];
+    eyeY = centroid[1];
+    eyeZ = centroid[2] - 2000;
+    centerX = centroid[0];
+    centerY = centroid[1];
+    centerZ = centroid[2];
+    
+    cout << "centroid " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
+    cout << "eye "  << eyeX << " " << eyeY << " " << eyeZ << endl;
+    cout << "center "  << centerX << " " << centerY << " " << centerZ << endl;
+ 
     std::vector <pcl::PointIndices> clusters;
     pcl::PointCloud <pcl::Normal>::Ptr normals (new pcl::PointCloud <pcl::Normal>);
     pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normal_estimator;
@@ -528,13 +540,7 @@ int main (int argc, char** argv)
       for (int j = 0; j < temp_cloud.size(); j++){
         points.push_back(Vec3f(temp_cloud.at(j).x, temp_cloud.at(j).y, temp_cloud.at(j).z));
       }
-      eyeX = points[0].x;
-      eyeY = points[0].y;
-      eyeZ = points[0].z;
-      centerX = points[0].x;
-      centerY = points[0].y;
-      centerZ = points[0].z -10000000;
-      boost::shared_ptr<PLANE> temp(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
+     boost::shared_ptr<PLANE> temp(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
       items_temp->push_back(temp);
     }
    
