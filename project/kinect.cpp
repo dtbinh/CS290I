@@ -486,6 +486,7 @@ int main (int argc, char** argv)
  
     int inlier_size;
 
+    boost::shared_ptr<vector <boost::shared_ptr<PRIMITIVE> > > items_temp(new vector<boost::shared_ptr<PRIMITIVE> >); 
     
     
     outliers = cloud_filtered;
@@ -515,7 +516,30 @@ int main (int argc, char** argv)
 	extract_neg_normal.filter(*normals);
       }
     }while(inlier_size > threshold);
+
+    for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
+	    it != meshes->end();
+	    it++){
+	
+      std::vector<Vec3f> points;
+      pcl::PointCloud<pcl::PointXYZ> temp_cloud;
+      pcl::fromPCLPointCloud2((*it)->cloud, temp_cloud);
+      points.reserve(temp_cloud.size());
+      for (int j = 0; j < temp_cloud.size(); j++){
+        points.push_back(Vec3f(temp_cloud.at(j).x, temp_cloud.at(j).y, temp_cloud.at(j).z));
+      }
+      eyeX = points[0].x;
+      eyeY = points[0].y;
+      eyeZ = points[0].z;
+      centerX = points[0].x;
+      centerY = points[0].y;
+      centerZ = points[0].z -10000000;
+      boost::shared_ptr<PLANE> temp(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
+      items_temp->push_back(temp);
+    }
+   
     i = 0;
+
     do{
       cout << "trying to segment cylinder: "<< outliers->size() << endl;
       pcl::ModelCoefficients::Ptr coefficients_cylinder 
@@ -590,6 +614,16 @@ int main (int argc, char** argv)
 */	
 
 	cylinders->push_back(coefficients_cylinder);
+
+        float r = coefficients_cylinder->values[6];
+        GLdouble m[16]= {1,0,0,0,
+                         0,1,0,0,
+                         0,0,1,0,
+                         0,0,0,1};
+        boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),r,height,m));
+        items_temp->push_back(temp);
+ 
+
 	extract_neg.setInputCloud(outliers);
 	extract_neg.setIndices(inliers);
 	extract_neg.filter(*outliers);
@@ -607,11 +641,20 @@ int main (int argc, char** argv)
       seg_sphere.setInputNormals(normals);
       seg_sphere.segment (*inliers, *coefficients_sphere);
       inlier_size = inliers->indices.size();
-      
+     
 
       if(inlier_size > 50){
 	cout << "sphere:" << i++ << " " << inlier_size << endl;
 	spheres->push_back(coefficients_sphere);
+
+     
+        Vec3f center = Vec3f(coefficients_sphere->values[0],
+  	  coefficients_sphere->values[1],coefficients_sphere->values[2]);
+        boost::shared_ptr<SPHERE> temp( new SPHERE(center,
+	  coefficients_sphere->values[3], Vec3f(1,0,0)));
+        items_temp->push_back(temp);
+  
+
 	extract_neg.setInputCloud(outliers);
 	extract_neg.setIndices(inliers);
 	extract_neg.filter(*outliers);
@@ -633,55 +676,6 @@ int main (int argc, char** argv)
       vis_spheres = spheres;
     if(cylinders->size())
       vis_cylinders = cylinders;
- 
-//HANNAH'S ITEMS
-/*  GLdouble m[16]= {1,0,0,0,
-                   0,1,0,0,
-                   0,0,1,0,
-                   1,0,0,1};
-  
-  CYLINDER temp2(Vec3f(0,0,1), .1, .1, m);
-
-  items.push_back (&temp2);  
- */
-    boost::shared_ptr<vector <boost::shared_ptr<PRIMITIVE> > > items_temp(new vector<boost::shared_ptr<PRIMITIVE> >); 
-   
-    for(std::vector<pcl::PolygonMesh::Ptr>::iterator it = meshes->begin();
-	    it != meshes->end();
-	    it++){
-	
-      std::vector<Vec3f> points;
-      pcl::PointCloud<pcl::PointXYZ> temp_cloud;
-      pcl::fromPCLPointCloud2((*it)->cloud, temp_cloud);
-      points.reserve(temp_cloud.size());
-      for (int j = 0; j < temp_cloud.size(); j++){
-        points.push_back(Vec3f(temp_cloud.at(j).x, temp_cloud.at(j).y, temp_cloud.at(j).z));
-      }
-      eyeX = points[0].x;
-      eyeY = points[0].y;
-      eyeZ = points[0].z;
-      centerX = points[0].x;
-      centerY = points[0].y;
-      centerZ = points[0].z -10000000;
-      boost::shared_ptr<PLANE> temp(new PLANE(points, Vec3f(0,1,0), 0, 0, 0));
-      items_temp->push_back(temp);
-    }
-    for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
-          spheres->begin();it != spheres->end(); it++){
-      Vec3f center = Vec3f((*it)->values[0],(*it)->values[1],(*it)->values[2]);
-      boost::shared_ptr<SPHERE> temp( new SPHERE(center,(*it)->values[3], Vec3f(1,0,0)));
-      items_temp->push_back(temp);
-    }
-    for(std::vector<pcl::ModelCoefficients::Ptr>::iterator it = 
-          cylinders->begin();it != cylinders->end(); it++){
-      float r = (*it)->values[6];
-      GLdouble m[16]= {1,0,0,0,
-                       0,1,0,0,
-                       0,0,1,0,
-                       0,0,0,1};
-      boost::shared_ptr<CYLINDER> temp( new CYLINDER(Vec3f(0,0,1),r,.1,m));
-      items_temp->push_back(temp);
-    }
  
     items = items_temp;  
   
