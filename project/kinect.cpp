@@ -276,6 +276,11 @@ void idle() {
 
 void display() {
   glClearColor(0,0,0,0);
+
+     
+  GLfloat lightpos[] ={eyeX, eyeY, eyeZ, 0.};
+  glLightfv(GL_LIGHT0, GL_POSITION, lightpos);
+
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   //set matrix to default
   glLoadIdentity();
@@ -316,6 +321,14 @@ void glutThread() {
 //  glutKeyboardFunc(keyboard);
   glutIdleFunc(idle);
   glutReshapeFunc(reshape);
+
+  glClearColor( 0.0, 0.0, 0.0, 0.0 );
+  glEnable(GL_COLOR_MATERIAL);
+  glShadeModel( GL_SMOOTH );
+  glEnable( GL_NORMALIZE );
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+
   glutMainLoop();
 }
 
